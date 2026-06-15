@@ -10,6 +10,7 @@ import {
   CheckCircle2, ArrowLeft, Eye, EyeOff, KeyRound, ChevronDown,
 } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
+import { ContactSupportModal } from "../components/ContactSupportModal";
 
 type TopView = "tabs" | "forgot";
 type ForgotStep = "verify" | "setPassword";
@@ -174,6 +175,7 @@ export function AuthPage() {
 
   const [topView, setTopView]     = useState<TopView>("tabs");
   const [activeTab, setActiveTab] = useState("login");
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   // ── Login
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("email");
@@ -286,9 +288,12 @@ export function AuthPage() {
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4" /><span>ISO 27001 認證</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4" /><span>客服熱線: 3468 8888</span>
-            </div>
+            <button
+              onClick={() => setShowSupportModal(true)}
+              className="flex items-center gap-2 hover:text-white transition-colors"
+            >
+              <Phone className="w-4 h-4" /><span>聯絡客服</span>
+            </button>
           </div>
         </div>
 
@@ -652,6 +657,7 @@ export function AuthPage() {
           </div>
         </div>
       </div>
+      <ContactSupportModal open={showSupportModal} onOpenChange={setShowSupportModal} />
     </div>
   );
 }
