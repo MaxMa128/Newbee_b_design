@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import {
-  LayoutDashboard, Briefcase, Users, Store, Building2,
-  Bell, CheckCheck, MessageSquare, ArrowRight,
+  Bell, CheckCheck, ArrowRight,
   Briefcase as BriefcaseIcon, Settings,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { NotificationDropdown } from "../components/NotificationDropdown";
+import { Sidebar } from "../components/Sidebar";
 import { useNotifications, type Notification } from "../contexts/notification-context";
 
 // ── Types ─────────────────────────────────────────────────
@@ -103,7 +103,7 @@ function NotifCard({
 
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const { notifications, unreadCount, unreadTalentCount, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
 
   const [readTab, setReadTab]         = useState<ReadTab>("all");
   const [categoryTab, setCategoryTab] = useState<CategoryTab>("all");
@@ -128,54 +128,11 @@ export function NotificationsPage() {
       .filter(n => ct === "all" || notifCategory(n) === ct)
       .length;
 
-  const navItems = [
-    { key: "dashboard",     icon: <LayoutDashboard className="w-5 h-5" />, label: "工作台",  path: "/dashboard",      badge: 0 },
-    { key: "jobs",          icon: <Briefcase className="w-5 h-5" />,       label: "職位管理", path: "/jobs",           badge: 0 },
-    { key: "talent",        icon: <Users className="w-5 h-5" />,           label: "人才管理", path: "/talent",         badge: unreadTalentCount },
-    { key: "stores",        icon: <Store className="w-5 h-5" />,           label: "門店管理", path: "/stores",         badge: 0 },
-    { key: "notifications", icon: <MessageSquare className="w-5 h-5" />,   label: "消息中心", path: "/notifications",  badge: unreadCount },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">NewBee</div>
-              <div className="text-xs text-slate-500">商戶平台</div>
-            </div>
-          </div>
-        </div>
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
-            {navItems.map(item => (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  item.key === "notifications"
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </aside>
+      <Sidebar />
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">

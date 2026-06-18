@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import {
-  LayoutDashboard, Briefcase, Users, Store, Building2,
-  Plus, MapPin, Phone, Pencil, X, Search, ChevronRight,
-  Trash2, AlertTriangle, CheckCircle2, Send, MessageSquare,
+  Store, Plus, MapPin, Pencil, X, Search, ChevronRight,
+  Trash2, AlertTriangle, ImageIcon, Upload,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { NotificationDropdown } from "../components/NotificationDropdown";
+import { Sidebar } from "../components/Sidebar";
 import { useNotifications } from "../contexts/notification-context";
 
 // ── Types ──────────────────────────────────────────────────
@@ -17,19 +17,18 @@ interface StoreRecord {
   name: string;
   district: string;
   address: string;
-  phone: string;
-  manager: string;
   activeJobs: number;
+  photoUrl?: string;
 }
 
 // ── Mock data ──────────────────────────────────────────────
 const INITIAL_STORES: StoreRecord[] = [
-  { id: "STR-001", name: "旺角分店",   district: "旺角",   address: "香港九龍旺角彌敦道 608 號總統商業大廈 3 樓",   phone: "+852 2345 6789", manager: "陳小姐",  activeJobs: 2 },
-  { id: "STR-002", name: "葵涌倉庫",   district: "葵涌",   address: "香港新界葵涌葵昌路 26 號貨運中心 B 倉",         phone: "+852 2456 7890", manager: "李先生",  activeJobs: 1 },
-  { id: "STR-003", name: "中環分店",   district: "中環",   address: "香港中環皇后大道中 30 號娛樂行 G 樓",           phone: "+852 2567 8901", manager: "張經理",  activeJobs: 3 },
-  { id: "STR-004", name: "尖沙咀分店", district: "尖沙咀", address: "香港九龍尖沙咀廣東道 17 號海港城",               phone: "+852 2678 9012", manager: "王主任",  activeJobs: 0 },
-  { id: "STR-005", name: "觀塘辦公室", district: "觀塘",   address: "香港九龍觀塘鴻圖道 78 號樂基中心 12 樓",         phone: "+852 2789 0123", manager: "劉副理",  activeJobs: 1 },
-  { id: "STR-006", name: "中環總部",   district: "中環",   address: "香港中環皇后大道中 15 號 20 樓",                 phone: "+852 2890 1234", manager: "黃總監",  activeJobs: 2 },
+  { id: "STR-001", name: "旺角分店",   district: "旺角",   address: "香港九龍旺角彌敦道 608 號總統商業大廈 3 樓",   activeJobs: 2 },
+  { id: "STR-002", name: "葵涌倉庫",   district: "葵涌",   address: "香港新界葵涌葵昌路 26 號貨運中心 B 倉",         activeJobs: 1 },
+  { id: "STR-003", name: "中環分店",   district: "中環",   address: "香港中環皇后大道中 30 號娛樂行 G 樓",           activeJobs: 3 },
+  { id: "STR-004", name: "尖沙咀分店", district: "尖沙咀", address: "香港九龍尖沙咀廣東道 17 號海港城",               activeJobs: 0 },
+  { id: "STR-005", name: "觀塘辦公室", district: "觀塘",   address: "香港九龍觀塘鴻圖道 78 號樂基中心 12 樓",         activeJobs: 1 },
+  { id: "STR-006", name: "中環總部",   district: "中環",   address: "香港中環皇后大道中 15 號 20 樓",                 activeJobs: 2 },
 ];
 
 const HK_DISTRICTS = [
@@ -108,8 +107,6 @@ function MapPickerModal({ open, address, onConfirm, onClose }: {
 }
 
 // ── Store Form Modal ───────────────────────────────────────
-type PhoneVerifyState = "idle" | "sent" | "verified" | "error";
-
 function StoreFormModal({
   store,
   onClose,
@@ -119,58 +116,26 @@ function StoreFormModal({
   onClose: () => void;
   onSave: (s: StoreRecord) => void;
 }) {
-  const isNew       = !store?.id;
-  const originalPhone = store?.phone ?? "";
+  const isNew = !store?.id;
 
   const [name,     setName]     = useState(store?.name     ?? "");
   const [district, setDistrict] = useState(store?.district ?? "");
   const [address,  setAddress]  = useState(store?.address  ?? "");
-  const [phone,    setPhone]    = useState(originalPhone);
-  const [manager,  setManager]  = useState(store?.manager  ?? "");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [showMap,  setShowMap]  = useState(false);
 
-  // Phone verification
-  const phoneChanged       = phone.trim() !== originalPhone.trim();
-  const needsVerify        = phone.trim() !== "" && (isNew || phoneChanged);
-  const [otp,        setOtp]        = useState("");
-  const [verifyState, setVerifyState] = useState<PhoneVerifyState>(
-    !isNew && !phoneChanged ? "verified" : "idle"
-  );
-  const [otpError, setOtpError] = useState("");
-
-  const handleSendOtp = () => {
-    setVerifyState("sent");
-    setOtp("");
-    setOtpError("");
-  };
-  const handleVerifyOtp = () => {
-    if (otp === "1234") {           // mock: any 4-digit code works in demo
-      setVerifyState("verified");
-      setOtpError("");
-    } else {
-      setOtpError("驗證碼有誤，請重新輸入");
-    }
-  };
-  const handlePhoneChange = (v: string) => {
-    setPhone(v);
-    setVerifyState("idle");
-    setOtp("");
-    setOtpError("");
-  };
-
-  const canSave =
-    name.trim() &&
-    district &&
-    address.trim() &&
-    (!needsVerify || verifyState === "verified");
+  const canSave = name.trim() && district && address.trim();
 
   const inputCls = "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
 
+  const photoPreview = photoFile ? URL.createObjectURL(photoFile) : null;
+
   const handleSave = () => {
     onSave({
-      id:         store?.id ?? `STR-${Date.now()}`,
-      name, district, address, phone, manager,
+      id:        store?.id ?? `STR-${Date.now()}`,
+      name, district, address,
       activeJobs: store?.activeJobs ?? 0,
+      photoUrl:  photoPreview ?? store?.photoUrl,
     });
   };
 
@@ -235,85 +200,43 @@ function StoreFormModal({
               )}
             </div>
 
-            {/* Manager name */}
+            {/* Store photo (optional) */}
             <div className="space-y-1.5">
-              <Label>負責人 / 店長</Label>
-              <input className={inputCls} placeholder="例：陳小姐" value={manager} onChange={e => setManager(e.target.value)} />
-            </div>
-
-            {/* Manager phone + verification */}
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                負責人電話
-                {verifyState === "verified" && (
-                  <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5" />已驗證
-                  </span>
-                )}
-              </Label>
-              <div className="flex gap-2">
-                <input
-                  className={`${inputCls} ${verifyState === "verified" ? "border-green-300 bg-green-50/40" : ""}`}
-                  placeholder="+852 xxxx xxxx"
-                  value={phone}
-                  onChange={e => handlePhoneChange(e.target.value)}
-                  disabled={verifyState === "sent"}
-                />
-                {needsVerify && verifyState !== "verified" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="shrink-0 gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50"
-                    disabled={!phone.trim() || verifyState === "sent"}
-                    onClick={handleSendOtp}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    {verifyState === "sent" ? "已發送" : "發送驗證碼"}
-                  </Button>
+              <Label>門店照片 <span className="text-slate-400 text-xs font-normal">（選填）</span></Label>
+              <div
+                onClick={() => document.getElementById("store-photo-input")?.click()}
+                className={`relative w-full h-36 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors overflow-hidden ${
+                  photoPreview
+                    ? "border-blue-300 bg-blue-50/30"
+                    : "border-slate-300 hover:border-blue-400 hover:bg-blue-50"
+                }`}
+              >
+                {photoPreview ? (
+                  <>
+                    <img src={photoPreview} alt="門店照片" className="absolute inset-0 w-full h-full object-cover rounded-xl" />
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setPhotoFile(null); }}
+                      className="absolute top-2 right-2 w-6 h-6 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="w-7 h-7 text-slate-400 mb-1.5" />
+                    <span className="text-sm font-medium text-slate-600">點擊上傳門店照片</span>
+                    <span className="text-xs text-slate-400 mt-0.5">PNG / JPG，建議橫向，最大 10MB</span>
+                  </>
                 )}
               </div>
-
-              {/* OTP input row */}
-              {verifyState === "sent" && (
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2.5">
-                  <div className="text-xs text-blue-700">
-                    驗證碼已發送至 <span className="font-semibold">{phone}</span>，請於 5 分鐘內輸入。
-                    <span className="text-slate-400 ml-1">（演示：輸入 1234）</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      className="flex-1 h-9 rounded-lg border border-blue-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-[0.3em] font-mono"
-                      placeholder="4 位驗證碼"
-                      maxLength={4}
-                      value={otp}
-                      onChange={e => { setOtp(e.target.value); setOtpError(""); }}
-                    />
-                    <Button
-                      type="button"
-                      className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
-                      disabled={otp.length < 4}
-                      onClick={handleVerifyOtp}
-                    >
-                      確認驗證
-                    </Button>
-                  </div>
-                  {otpError && <div className="text-xs text-red-600">{otpError}</div>}
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    className="text-xs text-slate-500 hover:text-blue-600 transition-colors"
-                  >
-                    重新發送
-                  </button>
-                </div>
-              )}
-
-              {needsVerify && verifyState === "idle" && phone.trim() && (
-                <div className="text-xs text-amber-600 flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  請發送驗證碼以確認負責人電話號碼
-                </div>
-              )}
+              <input
+                id="store-photo-input"
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={e => e.target.files?.[0] && setPhotoFile(e.target.files[0])}
+              />
             </div>
 
           </div>
@@ -344,7 +267,6 @@ function StoreFormModal({
 // ── Main Page ──────────────────────────────────────────────
 export function StoresPage() {
   const navigate = useNavigate();
-  const { unreadTalentCount, unreadCount } = useNotifications();
 
   const [stores, setStores]         = useState<StoreRecord[]>(INITIAL_STORES);
   const [search, setSearch]         = useState("");
@@ -371,47 +293,7 @@ export function StoresPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">NewBee</div>
-              <div className="text-xs text-slate-500">商戶平台</div>
-            </div>
-          </div>
-        </div>
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
-            {[
-              { key: "dashboard", icon: <LayoutDashboard className="w-5 h-5" />, label: "工作台",  path: "/dashboard", badge: 0 },
-              { key: "jobs",          icon: <Briefcase className="w-5 h-5" />,     label: "職位管理", path: "/jobs",          badge: 0 },
-              { key: "talent",        icon: <Users className="w-5 h-5" />,         label: "人才管理", path: "/talent",        badge: unreadTalentCount },
-              { key: "stores",        icon: <Store className="w-5 h-5" />,         label: "門店管理", path: "/stores",        badge: 0 },
-              { key: "notifications", icon: <MessageSquare className="w-5 h-5" />, label: "消息中心", path: "/notifications", badge: unreadCount },
-            ].map(item => (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  item.key === "stores" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </aside>
+      <Sidebar />
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -504,18 +386,9 @@ export function StoresPage() {
                         <span className="text-slate-700">{store.address}</span>
                       </div>
                     </div>
-                    {store.phone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-                        <span className="text-slate-700">{store.phone}</span>
-                      </div>
-                    )}
-                    {store.manager && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
-                          <span className="text-[8px] text-slate-600 font-bold">{store.manager[0]}</span>
-                        </div>
-                        <span className="text-slate-600">負責人：{store.manager}</span>
+                    {store.photoUrl && (
+                      <div className="mt-1 w-full h-20 rounded-lg overflow-hidden border border-slate-100">
+                        <img src={store.photoUrl} alt="門店照片" className="w-full h-full object-cover" />
                       </div>
                     )}
                   </div>

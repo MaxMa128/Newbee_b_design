@@ -4,8 +4,9 @@ import {
   LayoutDashboard, Briefcase, Plus, CheckCircle2, Clock, AlertCircle,
   ChevronRight, Settings, LogOut, Bell, Building2,
   Upload, FileText, AlertTriangle, ImageIcon, XCircle, RefreshCw,
-  Users, Store, ShieldCheck, Send, ChevronDown, Eye, EyeOff, Globe, MessageSquare,
+  ShieldCheck, Send, ChevronDown, Eye, EyeOff, Globe,
 } from "lucide-react";
+import { Sidebar } from "../components/Sidebar";
 import { DebugPanel } from "../components/DebugPanel";
 import { ContactSupportModal } from "../components/ContactSupportModal";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -501,60 +502,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
 
-      {/* ── Sidebar ── */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">NewBee</div>
-              <div className="text-xs text-slate-500">商戶平台</div>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
-            {[
-              { key: "dashboard",     icon: <LayoutDashboard className="w-5 h-5" />, label: "工作台",  path: "/dashboard",      badge: 0 },
-              { key: "jobs",          icon: <Briefcase className="w-5 h-5" />,       label: "職位管理", path: "/jobs",           badge: 0 },
-              { key: "talent",        icon: <Users className="w-5 h-5" />,           label: "人才管理", path: "/talent",          badge: unreadTalentCount },
-              { key: "stores",        icon: <Store className="w-5 h-5" />,           label: "門店管理", path: "/stores",          badge: 0 },
-              { key: "notifications", icon: <MessageSquare className="w-5 h-5" />,   label: "消息中心", path: "/notifications",   badge: unreadCount },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  item.key === "dashboard"
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        <div className="p-4 border-t border-slate-200">
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
-            <div className="text-sm font-medium text-slate-900 mb-1">需要協助？</div>
-            <div className="text-xs text-slate-600 mb-3">聯絡我們的專業團隊</div>
-            <Button onClick={() => setShowSupportModal(true)} variant="outline" size="sm" className="w-full text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
-              聯絡客服
-            </Button>
-          </div>
-        </div>
-      </aside>
+      <Sidebar showSupportCard onContactSupport={() => setShowSupportModal(true)} />
 
       {/* ── Main Content ── */}
       <div className="flex-1 flex flex-col">

@@ -4,6 +4,7 @@ import { DashboardPage } from "./pages/dashboard-page";
 import { CreateJobPage } from "./pages/create-job-page";
 import { JobsPage } from "./pages/jobs-page";
 import { TalentPage } from "./pages/talent-page";
+import { WorkRecordsPage } from "./pages/work-records-page";
 import { StoresPage } from "./pages/stores-page";
 import { MerchantProfilePage } from "./pages/merchant-profile-page";
 import { NotificationsPage } from "./pages/notifications-page";
@@ -32,6 +33,10 @@ export const router = createMemoryRouter([
   {
     path: "/talent",
     Component: TalentPage,
+  },
+  {
+    path: "/work-records",
+    Component: WorkRecordsPage,
   },
   {
     path: "/stores",

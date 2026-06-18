@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
-  Briefcase, Building2, LayoutDashboard, Plus,
+  Briefcase, Plus,
   MapPin, Users, X, AlertTriangle, CheckSquare,
   ChevronDown, Clock, Phone, Calendar, FileText,
   Award, Pencil, Save, ClipboardCheck, Store, MessageSquare,
+  UserCheck, Hourglass, Info, Search, Check,
 } from "lucide-react";
+import { Sidebar } from "../components/Sidebar";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -16,12 +18,22 @@ type HiringType = "fulltime" | "parttime" | "temporary";
 type JobStatus  = "active" | "unpublished" | "full";
 type FilterTab  = "all" | JobStatus;
 
+interface ShiftEntry {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
 interface Applicant {
   id: string;
   name: string;
   phone: string;
-  appliedAt: string;
-  appStatus: "待審核" | "已錄用" | "已拒絕";
+  age: number;
+  gender: "男" | "女";
+  education: string;
+  appStatus: "待審核" | "已錄用" | "已拒絕" | "候選池";
+  appType?: "normal" | "pool";
 }
 
 interface Job {
@@ -32,10 +44,14 @@ interface Job {
   hiringType: HiringType;
   status: JobStatus;
   wage: string;
+  wageMin: number;
+  wageMax: number;
+  validityMonths: number;
   headcount: number;
   filled: number;
   applications: number;
   postedAt: string;
+  expiryDate: string;
   // Detail fields
   jobCategory: string;
   jobDesc: string;
@@ -43,8 +59,38 @@ interface Job {
   workDays?: string[];
   workStart?: string;
   workEnd?: string;
+  shifts?: ShiftEntry[];
   address: string;
+  selectedStoreIds: string[];
   applicants: Applicant[];
+}
+
+const MOCK_STORES = [
+  { id: "S001", name: "旺角分店",   district: "旺角",   address: "香港九龍旺角彌敦道 608 號總統商業大廈 3 樓" },
+  { id: "S002", name: "中環分店",   district: "中環",   address: "香港中環皇后大道中 30 號娛樂行 G 樓" },
+  { id: "S003", name: "尖沙咀分店", district: "尖沙咀", address: "香港九龍尖沙咀廣東道 17 號海港城" },
+  { id: "S004", name: "葵涌倉庫",   district: "葵涌",   address: "香港新界葵涌葵昌路 26 號貨運中心 B 倉" },
+  { id: "S005", name: "觀塘辦公室", district: "觀塘",   address: "香港九龍觀塘鴻圖道 78 號樂基中心 12 樓" },
+  { id: "S006", name: "中環總部",   district: "中環",   address: "香港中環皇后大道中 15 號 20 樓" },
+  { id: "S007", name: "銅鑼灣分店", district: "銅鑼灣", address: "香港銅鑼灣記利佐治街 2 號 Fashion Walk" },
+  { id: "S008", name: "沙田分店",   district: "沙田",   address: "香港新界沙田新城市廣場 1 期 5 樓" },
+];
+
+const CERT_SUGGESTIONS = [
+  "電工證", "食品衛生證", "急救證", "駕駛執照（私家車）",
+  "駕駛執照（貨車）", "叉車操作證", "保安牌", "物業管理證",
+];
+
+const VALIDITY_OPTIONS = [1, 2, 3, 6, 12];
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+function buildWageStr(min: number, max: number, hiringType: HiringType): string {
+  const unit = hiringType === "fulltime" ? "/ 月" : "/ 小時";
+  const fmt = (n: number) => n.toLocaleString();
+  return min === max ? `HK$ ${fmt(min)} ${unit}` : `HK$ ${fmt(min)}–${fmt(max)} ${unit}`;
 }
 
 // ── Mock data ──────────────────────────────────────────────
@@ -52,80 +98,98 @@ const INITIAL_JOBS: Job[] = [
   {
     id: "JOB-001", title: "收銀員", store: "旺角分店", district: "旺角",
     hiringType: "parttime", status: "active",
-    wage: "HK$ 65 / 小時", headcount: 3, filled: 1, applications: 12, postedAt: "2026-06-05",
+    wage: "HK$ 65 / 小時", wageMin: 65, wageMax: 65, validityMonths: 2,
+    headcount: 3, filled: 1, applications: 12, postedAt: "2026-06-05", expiryDate: "2026-08-05",
     jobCategory: "零售 / 收銀", jobDesc: "負責收銀台日常操作，處理現金及電子支付，維持收銀區整潔，協助顧客查詢。要求態度友善、操作細心，具相關經驗者優先。",
     certs: [], workDays: ["mon","tue","wed","thu","fri"], workStart: "09:00", workEnd: "18:00",
-    address: "香港九龍旺角彌敦道 608 號總統商業大廈 3 樓",
+    address: "香港九龍旺角彌敦道 608 號總統商業大廈 3 樓", selectedStoreIds: ["S001"],
     applicants: [
-      { id: "APP-001", name: "陳大文", phone: "+852 9123 4567", appliedAt: "2026-06-06", appStatus: "已錄用" },
-      { id: "APP-002", name: "李小明", phone: "+852 6234 5678", appliedAt: "2026-06-07", appStatus: "待審核" },
-      { id: "APP-003", name: "張美儀", phone: "+852 5345 6789", appliedAt: "2026-06-08", appStatus: "待審核" },
-      { id: "APP-004", name: "王志豪", phone: "+852 9456 7890", appliedAt: "2026-06-08", appStatus: "待審核" },
+      { id: "APP-001", name: "陳大文", phone: "+852 9123 4567", age: 28, gender: "男", education: "高級文憑", appStatus: "已錄用" },
+      { id: "APP-002", name: "李小明", phone: "+852 6234 5678", age: 22, gender: "男", education: "副學士",   appStatus: "待審核" },
+      { id: "APP-003", name: "張美儀", phone: "+852 5345 6789", age: 25, gender: "女", education: "中學",     appStatus: "待審核" },
+      { id: "APP-004", name: "王志豪", phone: "+852 9456 7890", age: 31, gender: "男", education: "學士",     appStatus: "待審核" },
     ],
   },
   {
     id: "JOB-002", title: "倉務員", store: "葵涌倉庫", district: "葵涌",
     hiringType: "fulltime", status: "active",
-    wage: "HK$ 18,000 / 月", headcount: 2, filled: 0, applications: 5, postedAt: "2026-06-02",
+    wage: "HK$ 18,000 / 月", wageMin: 18000, wageMax: 18000, validityMonths: 2,
+    headcount: 2, filled: 0, applications: 5, postedAt: "2026-06-02", expiryDate: "2026-08-02",
     jobCategory: "物流 / 倉務", jobDesc: "負責倉庫貨品收發、整理及盤點，操作手推車及基本倉務設備，配合物流排班。需具備基本體力，持叉車操作證優先考慮。",
     certs: ["叉車操作證"], workDays: ["mon","tue","wed","thu","fri","sat"], workStart: "08:00", workEnd: "17:00",
-    address: "香港新界葵涌葵昌路 26 號貨運中心 B 倉",
+    address: "香港新界葵涌葵昌路 26 號貨運中心 B 倉", selectedStoreIds: ["S004"],
     applicants: [
-      { id: "APP-005", name: "吳家俊", phone: "+852 9567 8901", appliedAt: "2026-06-03", appStatus: "待審核" },
-      { id: "APP-006", name: "鄭偉明", phone: "+852 6678 9012", appliedAt: "2026-06-04", appStatus: "待審核" },
+      { id: "APP-005", name: "吳家俊", phone: "+852 9567 8901", age: 27, gender: "男", education: "中學",   appStatus: "待審核" },
+      { id: "APP-006", name: "鄭偉明", phone: "+852 6678 9012", age: 34, gender: "男", education: "文憑",   appStatus: "待審核" },
     ],
   },
   {
     id: "JOB-003", title: "侍應生", store: "中環分店", district: "中環",
     hiringType: "temporary", status: "active",
-    wage: "HK$ 70 / 小時", headcount: 5, filled: 2, applications: 23, postedAt: "2026-06-07",
+    wage: "HK$ 70 / 小時", wageMin: 70, wageMax: 70, validityMonths: 2,
+    headcount: 5, filled: 2, applications: 23, postedAt: "2026-06-07", expiryDate: "2026-08-07",
     jobCategory: "餐飲 / 廚房", jobDesc: "協助餐廳日常服務工作，包括接待客人、點餐、上菜及清理枱面。需具備基本廣東話溝通能力，具餐飲服務經驗者優先。",
     certs: ["食品衛生證"], workStart: "17:00", workEnd: "23:00",
-    address: "香港中環皇后大道中 30 號娛樂行 G 樓",
+    shifts: [
+      { id: "s1", date: "2026-07-05", startTime: "17:00", endTime: "23:00" },
+      { id: "s2", date: "2026-07-12", startTime: "17:00", endTime: "23:00" },
+    ],
+    address: "香港中環皇后大道中 30 號娛樂行 G 樓", selectedStoreIds: ["S002"],
     applicants: [
-      { id: "APP-007", name: "黃曉恩", phone: "+852 5789 0123", appliedAt: "2026-06-08", appStatus: "已錄用" },
-      { id: "APP-008", name: "林嘉慧", phone: "+852 9890 1234", appliedAt: "2026-06-08", appStatus: "已錄用" },
-      { id: "APP-009", name: "梁志偉", phone: "+852 6901 2345", appliedAt: "2026-06-09", appStatus: "待審核" },
-      { id: "APP-010", name: "謝麗珊", phone: "+852 5012 3456", appliedAt: "2026-06-09", appStatus: "待審核" },
-      { id: "APP-011", name: "何俊賢", phone: "+852 9123 4560", appliedAt: "2026-06-09", appStatus: "待審核" },
+      { id: "APP-007", name: "黃曉恩", phone: "+852 5789 0123", age: 24, gender: "女", education: "副學士",   appStatus: "已錄用" },
+      { id: "APP-008", name: "林嘉慧", phone: "+852 9890 1234", age: 29, gender: "女", education: "學士",     appStatus: "已錄用" },
+      { id: "APP-009", name: "梁志偉", phone: "+852 6901 2345", age: 33, gender: "男", education: "中學",     appStatus: "待審核" },
+      { id: "APP-010", name: "謝麗珊", phone: "+852 5012 3456", age: 26, gender: "女", education: "文憑",     appStatus: "待審核" },
+      { id: "APP-011", name: "何俊賢", phone: "+852 9123 4560", age: 38, gender: "男", education: "高級文憑", appStatus: "待審核" },
     ],
   },
   {
     id: "JOB-004", title: "推廣員", store: "尖沙咀分店", district: "尖沙咀",
     hiringType: "temporary", status: "full",
-    wage: "HK$ 80 / 小時", headcount: 4, filled: 4, applications: 11, postedAt: "2026-06-01",
+    wage: "HK$ 80 / 小時", wageMin: 80, wageMax: 80, validityMonths: 2,
+    headcount: 4, filled: 4, applications: 11, postedAt: "2026-06-01", expiryDate: "2026-08-01",
     jobCategory: "銷售 / 推廣", jobDesc: "在指定地點推廣品牌產品，派發宣傳物料及介紹產品功能，形象端莊，具親和力。無需相關經驗，即場培訓。",
     certs: [],
-    address: "香港九龍尖沙咀廣東道 17 號海港城",
+    shifts: [
+      { id: "s1", date: "2026-07-01", startTime: "10:00", endTime: "18:00" },
+      { id: "s2", date: "2026-07-02", startTime: "10:00", endTime: "18:00" },
+      { id: "s3", date: "2026-07-03", startTime: "10:00", endTime: "18:00" },
+    ],
+    address: "香港九龍尖沙咀廣東道 17 號海港城", selectedStoreIds: ["S003"],
     applicants: [
-      { id: "APP-012", name: "蔡敏儀", phone: "+852 6234 5670", appliedAt: "2026-06-02", appStatus: "已錄用" },
-      { id: "APP-013", name: "許志安", phone: "+852 9345 6781", appliedAt: "2026-06-02", appStatus: "已錄用" },
-      { id: "APP-014", name: "盧嘉欣", phone: "+852 5456 7892", appliedAt: "2026-06-03", appStatus: "已錄用" },
-      { id: "APP-015", name: "鍾浩然", phone: "+852 9567 8903", appliedAt: "2026-06-03", appStatus: "已錄用" },
+      { id: "APP-012", name: "蔡敏儀", phone: "+852 6234 5670", age: 23, gender: "女", education: "文憑",     appStatus: "已錄用", appType: "normal" },
+      { id: "APP-013", name: "許志安", phone: "+852 9345 6781", age: 30, gender: "男", education: "副學士",   appStatus: "已錄用", appType: "normal" },
+      { id: "APP-014", name: "盧嘉欣", phone: "+852 5456 7892", age: 21, gender: "女", education: "中學",     appStatus: "已錄用", appType: "normal" },
+      { id: "APP-015", name: "鍾浩然", phone: "+852 9567 8903", age: 27, gender: "男", education: "高級文憑", appStatus: "已錄用", appType: "normal" },
+      { id: "APP-020", name: "羅子謙", phone: "+852 9201 3344", age: 26, gender: "男", education: "副學士",   appStatus: "候選池", appType: "pool" },
+      { id: "APP-021", name: "潘詠琳", phone: "+852 6312 4455", age: 22, gender: "女", education: "文憑",     appStatus: "候選池", appType: "pool" },
+      { id: "APP-022", name: "葉偉豪", phone: "+852 5423 5566", age: 29, gender: "男", education: "高級文憑", appStatus: "候選池", appType: "pool" },
     ],
   },
   {
     id: "JOB-005", title: "清潔員", store: "觀塘辦公室", district: "觀塘",
     hiringType: "parttime", status: "unpublished",
-    wage: "HK$ 55 / 小時", headcount: 2, filled: 0, applications: 3, postedAt: "2026-05-20",
+    wage: "HK$ 55 / 小時", wageMin: 55, wageMax: 55, validityMonths: 2,
+    headcount: 2, filled: 0, applications: 3, postedAt: "2026-05-20", expiryDate: "2026-07-20",
     jobCategory: "清潔 / 保潔", jobDesc: "負責辦公室日常清潔工作，包括清掃地板、清潔洗手間及公共區域。工作時間靈活，歡迎全職或兼職申請。",
     certs: [], workDays: ["mon","wed","fri"], workStart: "08:00", workEnd: "12:00",
-    address: "香港九龍觀塘鴻圖道 78 號樂基中心 12 樓",
+    address: "香港九龍觀塘鴻圖道 78 號樂基中心 12 樓", selectedStoreIds: ["S005"],
     applicants: [
-      { id: "APP-016", name: "方翠珊", phone: "+852 6678 9014", appliedAt: "2026-05-21", appStatus: "已拒絕" },
+      { id: "APP-016", name: "方翠珊", phone: "+852 6678 9014", age: 42, gender: "女", education: "中學", appStatus: "已拒絕" },
     ],
   },
   {
     id: "JOB-006", title: "客服代表", store: "中環總部", district: "中環",
     hiringType: "fulltime", status: "unpublished",
-    wage: "HK$ 15,000–20,000 / 月", headcount: 3, filled: 1, applications: 18, postedAt: "2026-04-15",
+    wage: "HK$ 15,000–20,000 / 月", wageMin: 15000, wageMax: 20000, validityMonths: 2,
+    headcount: 3, filled: 1, applications: 18, postedAt: "2026-04-15", expiryDate: "2026-06-15",
     jobCategory: "行政 / 文員", jobDesc: "處理客戶查詢、投訴及跟進工作，透過電話、電郵及即時通訊渠道與客戶保持溝通。需具備良好廣東話、普通話及基本英語能力。",
     certs: [], workDays: ["mon","tue","wed","thu","fri"], workStart: "09:00", workEnd: "18:00",
-    address: "香港中環皇后大道中 15 號 20 樓",
+    address: "香港中環皇后大道中 15 號 20 樓", selectedStoreIds: ["S006"],
     applicants: [
-      { id: "APP-017", name: "劉嘉穎", phone: "+852 5789 0125", appliedAt: "2026-04-16", appStatus: "已錄用" },
-      { id: "APP-018", name: "陳俊傑", phone: "+852 9890 1236", appliedAt: "2026-04-17", appStatus: "已拒絕" },
-      { id: "APP-019", name: "周美玲", phone: "+852 6901 2347", appliedAt: "2026-04-18", appStatus: "已拒絕" },
+      { id: "APP-017", name: "劉嘉穎", phone: "+852 5789 0125", age: 29, gender: "女", education: "學士",   appStatus: "已錄用" },
+      { id: "APP-018", name: "陳俊傑", phone: "+852 9890 1236", age: 35, gender: "男", education: "副學士", appStatus: "已拒絕" },
+      { id: "APP-019", name: "周美玲", phone: "+852 6901 2347", age: 26, gender: "女", education: "學士",   appStatus: "已拒絕" },
     ],
   },
 ];
@@ -149,6 +213,7 @@ const APP_STATUS_COLORS: Record<Applicant["appStatus"], string> = {
   "待審核": "bg-amber-50 text-amber-700 border-amber-200",
   "已錄用": "bg-green-50 text-green-700 border-green-200",
   "已拒絕": "bg-red-50 text-red-600 border-red-200",
+  "候選池": "bg-violet-50 text-violet-700 border-violet-200",
 };
 
 const JOB_CATEGORIES = [
@@ -183,12 +248,100 @@ const inputCls = "w-full text-sm text-slate-700 border border-slate-200 rounded-
 
 function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => void; onSave: (updated: Job) => void }) {
   const navigate = useNavigate();
+  const isUnpublished = job.status === "unpublished";
   const remaining = job.headcount - job.filled;
-  const [editing, setEditing] = useState(false);
+  const normalApplicants = job.applicants.filter(a => a.appType !== "pool");
+  const poolApplicants   = job.applicants.filter(a => a.appType === "pool");
+  const [editing, setEditing] = useState(isUnpublished);
   const [draft, setDraft] = useState<Job>(job);
+  const [draftWageMin, setDraftWageMin] = useState(String(job.wageMin));
+  const [draftWageMax, setDraftWageMax] = useState(String(job.wageMax));
+  const [draftValidityMonths, setDraftValidityMonths] = useState(job.validityMonths);
+  const [draftValidityCustom, setDraftValidityCustom] = useState("");
+  // Certs
+  const [draftCerts, setDraftCerts] = useState<string[]>(job.certs);
+  const [draftCertInput, setDraftCertInput] = useState("");
+  // Shifts (temporary)
+  const [draftShifts, setDraftShifts] = useState<ShiftEntry[]>(
+    job.shifts?.length ? job.shifts : [{ id: "s-new", date: "", startTime: "", endTime: "" }]
+  );
+  // Store multi-select
+  const [draftSelectedStoreIds, setDraftSelectedStoreIds] = useState<string[]>(job.selectedStoreIds ?? []);
+  const [draftStoreSearch, setDraftStoreSearch] = useState("");
+  const storeDropdownRef = useRef<HTMLDivElement>(null);
+  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
 
-  const handleSave = () => { onSave(draft); setEditing(false); };
-  const handleCancel = () => { setDraft(job); setEditing(false); };
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (storeDropdownRef.current && !storeDropdownRef.current.contains(e.target as Node)) {
+        setStoreDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const effectiveValidity = draftValidityCustom ? Number(draftValidityCustom) : draftValidityMonths;
+  const expiryPreview = addMonths(draft.postedAt, effectiveValidity);
+
+  const addDraftCert = (val: string) => {
+    const t = val.trim();
+    if (t && !draftCerts.includes(t)) setDraftCerts(p => [...p, t]);
+    setDraftCertInput("");
+  };
+  const removeDraftCert = (c: string) => setDraftCerts(p => p.filter(x => x !== c));
+
+  const addDraftShift = () =>
+    setDraftShifts(p => [...p, { id: Date.now().toString(), date: "", startTime: "", endTime: "" }]);
+  const removeDraftShift = (id: string) => {
+    if (draftShifts.length === 1) return;
+    setDraftShifts(p => p.filter(s => s.id !== id));
+  };
+  const updateDraftShift = (id: string, field: keyof ShiftEntry, value: string) =>
+    setDraftShifts(p => p.map(s => s.id === id ? { ...s, [field]: value } : s));
+
+  const toggleDraftStore = (id: string) =>
+    setDraftSelectedStoreIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const filteredStores = MOCK_STORES.filter(s =>
+    s.name.includes(draftStoreSearch) || s.district.includes(draftStoreSearch)
+  );
+
+  const handleSave = () => {
+    const wMin = Number(draftWageMin) || 0;
+    const wMax = Number(draftWageMax) || 0;
+    const vMonths = effectiveValidity;
+    const primaryStore = MOCK_STORES.find(s => s.id === draftSelectedStoreIds[0]);
+    const saved: Job = {
+      ...draft,
+      certs: draftCerts,
+      shifts: draft.hiringType === "temporary" ? draftShifts : undefined,
+      selectedStoreIds: draftSelectedStoreIds,
+      store: primaryStore?.name ?? draft.store,
+      district: primaryStore?.district ?? draft.district,
+      address: primaryStore?.address ?? draft.address,
+      wageMin: wMin,
+      wageMax: wMax,
+      validityMonths: vMonths,
+      wage: buildWageStr(wMin, wMax, draft.hiringType),
+      expiryDate: addMonths(draft.postedAt, vMonths),
+    };
+    onSave(saved);
+    setEditing(false);
+  };
+  const handleCancel = () => {
+    setDraft(job);
+    setDraftCerts(job.certs);
+    setDraftCertInput("");
+    setDraftShifts(job.shifts?.length ? job.shifts : [{ id: "s-new", date: "", startTime: "", endTime: "" }]);
+    setDraftSelectedStoreIds(job.selectedStoreIds ?? []);
+    setDraftStoreSearch("");
+    setDraftWageMin(String(job.wageMin));
+    setDraftWageMax(String(job.wageMax));
+    setDraftValidityMonths(job.validityMonths);
+    setDraftValidityCustom("");
+    setEditing(false);
+  };
 
   const toggleDraftDay = (key: string) => {
     setDraft(d => {
@@ -212,8 +365,13 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                 {STATUS_LABELS[job.status]}
               </span>
               {editing && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium">
-                  <Pencil className="w-3 h-3" />編輯中
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                  isUnpublished
+                    ? "bg-amber-50 border-amber-200 text-amber-700"
+                    : "bg-blue-50 border-blue-200 text-blue-700"
+                }`}>
+                  <Pencil className="w-3 h-3" />
+                  {isUnpublished ? "編輯並重新發布" : "編輯中"}
                 </span>
               )}
             </div>
@@ -232,16 +390,17 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
         <div className="flex-1 overflow-y-auto">
 
           {/* Key metrics */}
-          <div className="px-6 py-4 grid grid-cols-3 gap-3 border-b border-slate-100">
+          <div className={`px-6 py-4 grid gap-3 border-b border-slate-100 ${poolApplicants.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             {[
               { label: "招募人數", value: `${editing ? draft.headcount : job.headcount} 人`, icon: <Users className="w-4 h-4 text-blue-500" /> },
               { label: "剩餘名額", value: `${remaining} 人`, icon: <Users className="w-4 h-4 text-amber-500" />, highlight: remaining === 0 },
-              { label: "收到申請", value: `${job.applications} 人`, icon: <FileText className="w-4 h-4 text-green-500" /> },
+              { label: "收到申請", value: `${normalApplicants.length} 人`, icon: <FileText className="w-4 h-4 text-green-500" /> },
+              ...(poolApplicants.length > 0 ? [{ label: "候選池", value: `${poolApplicants.length} 人`, icon: <Hourglass className="w-4 h-4 text-violet-500" />, isPool: true }] : []),
             ].map(m => (
-              <div key={m.label} className="bg-slate-50 rounded-xl p-3 text-center">
+              <div key={m.label} className={`rounded-xl p-3 text-center ${"isPool" in m && m.isPool ? "bg-violet-50 border border-violet-100" : "bg-slate-50"}`}>
                 <div className="flex items-center justify-center mb-1.5">{m.icon}</div>
-                <div className={`text-xl font-semibold ${m.highlight ? "text-teal-600" : "text-slate-900"}`}>{m.value}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{m.label}</div>
+                <div className={`text-xl font-semibold ${"highlight" in m && m.highlight ? "text-teal-600" : "isPool" in m && m.isPool ? "text-violet-700" : "text-slate-900"}`}>{m.value}</div>
+                <div className={`text-xs mt-0.5 ${"isPool" in m && m.isPool ? "text-violet-500" : "text-slate-500"}`}>{m.label}</div>
               </div>
             ))}
           </div>
@@ -312,31 +471,49 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
               </div>
 
               <div className="px-6 py-5 border-b border-slate-100">
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">招募資訊</div>
-                <Row label="招募人數"><span className="text-sm font-semibold text-slate-900">{job.headcount} 人</span></Row>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">招募詳情</div>
+                <div className="space-y-3">
+                  <Row label="招募人數"><span className="text-sm font-semibold text-slate-900">{job.headcount} 人</span></Row>
+                  <Row label="薪酬範圍"><span className="text-sm font-semibold text-slate-900">{job.wage}</span></Row>
+                  <Row label="職位有效期">
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <span>{job.validityMonths} 個月</span>
+                      <span className="text-slate-300">·</span>
+                      <span className="text-slate-500">截止 {job.expiryDate}</span>
+                    </div>
+                  </Row>
+                </div>
               </div>
 
               {/* Applicants */}
               <div className="px-6 py-5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">申請記錄</div>
-                  <span className="text-xs text-slate-500">{job.applicants.length} 位申請者</span>
+                  <span className="text-xs text-slate-500">{normalApplicants.length} 位申請者</span>
                 </div>
-                {job.applicants.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-slate-400">暫無申請記錄</div>
+                {normalApplicants.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-slate-400">暫無正式申請記錄</div>
                 ) : (
                   <div className="space-y-2">
-                    {job.applicants.map(a => (
+                    {normalApplicants.map(a => (
                       <div key={a.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-semibold shrink-0">
                           {a.name[0]}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-900">{a.name}</div>
-                          <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                            <Phone className="w-3 h-3" />{a.phone}
-                            <span className="text-slate-300 mx-1">·</span>
-                            <Calendar className="w-3 h-3" />{a.appliedAt}
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-900">{a.name}</span>
+                            <span className="text-xs text-slate-400">{a.age} 歲</span>
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded-full border font-medium ${
+                              a.gender === "女"
+                                ? "bg-pink-50 text-pink-600 border-pink-200"
+                                : "bg-blue-50 text-blue-600 border-blue-200"
+                            }`}>{a.gender}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                            <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{a.phone}</span>
+                            <span className="text-slate-300">·</span>
+                            <span>{a.education}</span>
                           </div>
                         </div>
                         {a.appStatus === "待審核" ? (
@@ -355,15 +532,70 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                     ))}
                   </div>
                 )}
+
+                {/* Candidate Pool Section */}
+                {poolApplicants.length > 0 && (
+                  <div className="mt-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-100 border border-violet-200">
+                        <Hourglass className="w-3 h-3 text-violet-600" />
+                        <span className="text-xs font-semibold text-violet-700">候選池</span>
+                        <span className="text-xs text-violet-500">{poolApplicants.length} 人</span>
+                      </div>
+                      <span className="text-xs text-slate-400">如有正式員工臨時缺席，可從候選池快速補位</span>
+                    </div>
+                    <div className="space-y-2">
+                      {poolApplicants.map(a => (
+                        <div key={a.id} className="flex items-center gap-3 p-3 bg-violet-50/60 rounded-xl border border-violet-100">
+                          <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 text-sm font-semibold shrink-0">
+                            {a.name[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-slate-900">{a.name}</span>
+                              <span className="text-xs text-slate-400">{a.age} 歲</span>
+                              <span className={`text-[11px] px-1.5 py-0.5 rounded-full border font-medium ${
+                                a.gender === "女"
+                                  ? "bg-pink-50 text-pink-600 border-pink-200"
+                                  : "bg-blue-50 text-blue-600 border-blue-200"
+                              }`}>{a.gender}</span>
+                              {a.appStatus === "候選池" && (
+                                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-violet-100 border border-violet-200 text-violet-600 font-medium">候選池</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                              <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{a.phone}</span>
+                              <span className="text-slate-300">·</span>
+                              <span>{a.education}</span>
+                            </div>
+                          </div>
+                          {a.appStatus === "候選池" ? (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                onClick={() => navigate(`/talent?applicant=${a.id}`)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-green-300 bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors"
+                              >
+                                <UserCheck className="w-3 h-3" />直接錄用
+                              </button>
+                            </div>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded-full border text-xs font-medium shrink-0 ${APP_STATUS_COLORS[a.appStatus]}`}>
+                              {a.appStatus}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
             /* ── EDIT mode ── */
             <div className="px-6 py-5 space-y-6">
 
-              {/* 職位基本資料 */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">職位基本資料</div>
+              {/* ① 職位基本資料 */}
+              <EditSection index={1} title="職位基本資料">
                 <div className="space-y-4">
                   <EditField label="職位名稱">
                     <input className={inputCls} value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} />
@@ -391,13 +623,12 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                     </div>
                   </EditField>
                 </div>
-              </div>
+              </EditSection>
 
-              {/* 工作時間 */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">工作時間</div>
-                <div className="space-y-4">
-                  {draft.hiringType !== "temporary" && (
+              {/* ② 工作時間 */}
+              <EditSection index={2} title="工作時間">
+                {draft.hiringType !== "temporary" ? (
+                  <div className="space-y-4">
                     <EditField label="工作日">
                       <div className="grid grid-cols-7 gap-1">
                         {WEEKDAYS.map(day => (
@@ -416,21 +647,53 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                         ))}
                       </div>
                     </EditField>
-                  )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <EditField label="上班時間">
-                      <input type="time" className={inputCls} value={draft.workStart ?? ""} onChange={e => setDraft(d => ({ ...d, workStart: e.target.value }))} />
-                    </EditField>
-                    <EditField label="下班時間">
-                      <input type="time" className={inputCls} value={draft.workEnd ?? ""} onChange={e => setDraft(d => ({ ...d, workEnd: e.target.value }))} />
-                    </EditField>
+                    <div className="grid grid-cols-2 gap-3">
+                      <EditField label="上班時間">
+                        <input type="time" className={inputCls} value={draft.workStart ?? ""} onChange={e => setDraft(d => ({ ...d, workStart: e.target.value }))} />
+                      </EditField>
+                      <EditField label="下班時間">
+                        <input type="time" className={inputCls} value={draft.workEnd ?? ""} onChange={e => setDraft(d => ({ ...d, workEnd: e.target.value }))} />
+                      </EditField>
+                    </div>
                   </div>
-                </div>
-              </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {draftShifts.map((shift, idx) => (
+                      <div key={shift.id} className="flex items-end gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <div className="flex-1 grid grid-cols-3 gap-2">
+                          <EditField label={`第 ${idx + 1} 日 — 日期`}>
+                            <input type="date" className={inputCls} value={shift.date} onChange={e => updateDraftShift(shift.id, "date", e.target.value)} />
+                          </EditField>
+                          <EditField label="上班時間">
+                            <input type="time" className={inputCls} value={shift.startTime} onChange={e => updateDraftShift(shift.id, "startTime", e.target.value)} />
+                          </EditField>
+                          <EditField label="下班時間">
+                            <input type="time" className={inputCls} value={shift.endTime} onChange={e => updateDraftShift(shift.id, "endTime", e.target.value)} />
+                          </EditField>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDraftShift(shift.id)}
+                          disabled={draftShifts.length === 1}
+                          className="mb-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addDraftShift}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />新增工作日期
+                    </button>
+                  </div>
+                )}
+              </EditSection>
 
-              {/* 職位詳情 */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">職位詳情</div>
+              {/* ③ 職位詳情 */}
+              <EditSection index={3} title="職位詳情">
                 <div className="space-y-4">
                   <EditField label="工作種類">
                     <div className="relative">
@@ -453,37 +716,216 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                       onChange={e => setDraft(d => ({ ...d, jobDesc: e.target.value }))}
                     />
                   </EditField>
-                </div>
-              </div>
-
-              {/* 門店資訊 */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">門店資訊</div>
-                <div className="space-y-4">
-                  <EditField label="門店名稱">
-                    <input className={inputCls} value={draft.store} onChange={e => setDraft(d => ({ ...d, store: e.target.value }))} />
+                  <EditField label="技能 / 證書要求">
+                    <div className="space-y-2">
+                      {draftCerts.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {draftCerts.map(c => (
+                            <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium">
+                              {c}
+                              <button type="button" onClick={() => removeDraftCert(c)} className="hover:text-blue-900">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          className={inputCls}
+                          placeholder="輸入證書名稱後按 Enter 或點擊新增"
+                          value={draftCertInput}
+                          onChange={e => setDraftCertInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDraftCert(draftCertInput); } }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addDraftCert(draftCertInput)}
+                          className="shrink-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {CERT_SUGGESTIONS.filter(s => !draftCerts.includes(s)).map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => addDraftCert(s)}
+                            className="text-xs px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            + {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </EditField>
-                  <EditField label="詳細地址">
-                    <input className={inputCls} value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))} />
-                  </EditField>
                 </div>
-              </div>
+              </EditSection>
 
-              {/* 招募資訊 */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">招募資訊</div>
-                <EditField label="招募人數">
-                  <div className="relative w-36">
-                    <input
-                      type="number" min={1}
-                      className={inputCls}
-                      value={draft.headcount}
-                      onChange={e => setDraft(d => ({ ...d, headcount: Number(e.target.value) || d.headcount }))}
-                    />
-                    <span className="absolute right-3 top-2.5 text-sm text-slate-400 pointer-events-none">人</span>
+              {/* ④ 選擇門店 */}
+              <EditSection index={4} title="選擇門店">
+                <div className="space-y-3">
+                  {draftSelectedStoreIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {draftSelectedStoreIds.map(id => {
+                        const s = MOCK_STORES.find(x => x.id === id);
+                        if (!s) return null;
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-lg font-medium">
+                            <Store className="w-3 h-3 shrink-0" />
+                            {s.name}
+                            <span className="text-blue-400">{s.district}</span>
+                            <button type="button" onClick={() => toggleDraftStore(id)} className="hover:text-blue-900 ml-0.5">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div ref={storeDropdownRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setStoreDropdownOpen(o => !o)}
+                      className={`w-full h-9 flex items-center gap-2 px-3 rounded-lg border text-sm transition-colors text-left ${
+                        storeDropdownOpen ? "border-blue-400 ring-[3px] ring-blue-500/20" : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className={draftSelectedStoreIds.length > 0 ? "text-slate-600 text-xs" : "text-slate-400 text-xs"}>
+                        {draftSelectedStoreIds.length > 0 ? `已選 ${draftSelectedStoreIds.length} 家門店，繼續新增` : "搜尋並選擇門店（可多選）"}
+                      </span>
+                      <ChevronDown className={`ml-auto w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${storeDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {storeDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                        <div className="p-2 border-b border-slate-100">
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-2 w-3 h-3 text-slate-400" />
+                            <input
+                              autoFocus
+                              value={draftStoreSearch}
+                              onChange={e => setDraftStoreSearch(e.target.value)}
+                              placeholder="輸入門店名稱或地區篩選…"
+                              className="w-full pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-44 overflow-y-auto">
+                          {filteredStores.length === 0 ? (
+                            <div className="py-4 text-center text-xs text-slate-400">找不到符合的門店</div>
+                          ) : filteredStores.map(s => {
+                            const sel = draftSelectedStoreIds.includes(s.id);
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => toggleDraftStore(s.id)}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${sel ? "bg-blue-50/60" : ""}`}
+                              >
+                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
+                                  {sel && <Check className="w-2.5 h-2.5 text-white" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-medium text-slate-900">{s.name}</div>
+                                  <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                                    <span className="text-blue-600">{s.district}</span> · {s.address}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </EditField>
-              </div>
+                  {draftSelectedStoreIds.length === 0 && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      請至少選擇一家門店
+                    </p>
+                  )}
+                </div>
+              </EditSection>
+
+              {/* ⑤ 招募詳情 */}
+              <EditSection index={5} title="招募詳情">
+                <div className="space-y-4">
+                  <EditField label="招募人數">
+                    <div className="relative w-36">
+                      <input
+                        type="number" min={1}
+                        className={inputCls}
+                        value={draft.headcount}
+                        onChange={e => setDraft(d => ({ ...d, headcount: Number(e.target.value) || d.headcount }))}
+                      />
+                      <span className="absolute right-3 top-2 text-sm text-slate-400 pointer-events-none">人</span>
+                    </div>
+                  </EditField>
+                  <EditField label={draft.hiringType === "fulltime" ? "每月薪酬範圍" : "每小時薪酬範圍"}>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                          <input type="number" min={0} className={`${inputCls} pl-9 text-xs`} placeholder="最低" value={draftWageMin} onChange={e => setDraftWageMin(e.target.value)} />
+                        </div>
+                        <span className="text-slate-400 text-sm shrink-0">–</span>
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                          <input type="number" min={0} className={`${inputCls} pl-9 text-xs`} placeholder="最高" value={draftWageMax} onChange={e => setDraftWageMax(e.target.value)} />
+                        </div>
+                        <span className="text-xs text-slate-500 shrink-0 w-12">{draft.hiringType === "fulltime" ? "/ 月" : "/ 小時"}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 flex items-start gap-1.5">
+                        <Info className="w-3 h-3 shrink-0 mt-0.5" />若最低與最高相同，只顯示單一數字。
+                      </p>
+                    </div>
+                  </EditField>
+                  <EditField label="職位有效期">
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        {VALIDITY_OPTIONS.map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => { setDraftValidityMonths(m); setDraftValidityCustom(""); }}
+                            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                              draftValidityMonths === m && !draftValidityCustom
+                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            {m} 個月
+                          </button>
+                        ))}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-slate-500">自訂</span>
+                          <div className="relative">
+                            <input
+                              type="number" min={1} max={12} placeholder="月數"
+                              value={draftValidityCustom}
+                              onChange={e => { const v = e.target.value; if (v === "" || (Number(v) >= 1 && Number(v) <= 12)) setDraftValidityCustom(v); }}
+                              className={`${inputCls} w-16 pr-6`}
+                            />
+                            <span className="absolute right-2 top-2 text-xs text-slate-400 pointer-events-none">月</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+                        <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span className="text-xs text-slate-600">
+                          預計截止日期：<span className="font-semibold text-slate-900 ml-1">{expiryPreview}</span>
+                        </span>
+                        <span className="text-xs text-slate-400 ml-1">（{effectiveValidity} 個月後）</span>
+                      </div>
+                      <p className="text-xs text-slate-400 flex items-start gap-1.5">
+                        <Info className="w-3 h-3 shrink-0 mt-0.5" />有效期最長不超過 12 個月，到期後職位自動下架。
+                      </p>
+                    </div>
+                  </EditField>
+                </div>
+              </EditSection>
 
             </div>
           )}
@@ -494,10 +936,47 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
         <div className="px-6 py-4 border-t border-slate-200 flex justify-between gap-3 shrink-0">
           {editing ? (
             <>
-              <Button variant="outline" onClick={handleCancel}>取消修改</Button>
-              <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
-                <Save className="w-4 h-4" />儲存修改
+              <Button variant="outline" onClick={isUnpublished ? onClose : handleCancel}>
+                {isUnpublished ? "取消" : "取消修改"}
               </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleSave} className="gap-1.5">
+                  <Save className="w-4 h-4" />儲存草稿
+                </Button>
+                {isUnpublished && (
+                  <Button
+                    onClick={() => {
+                      const wMin = Number(draftWageMin) || 0;
+                      const wMax = Number(draftWageMax) || 0;
+                      const vMonths = effectiveValidity;
+                      const primaryStore = MOCK_STORES.find(s => s.id === draftSelectedStoreIds[0]);
+                      onSave({
+                        ...draft,
+                        status: "active",
+                        certs: draftCerts,
+                        shifts: draft.hiringType === "temporary" ? draftShifts : undefined,
+                        selectedStoreIds: draftSelectedStoreIds,
+                        store: primaryStore?.name ?? draft.store,
+                        district: primaryStore?.district ?? draft.district,
+                        address: primaryStore?.address ?? draft.address,
+                        wageMin: wMin, wageMax: wMax,
+                        validityMonths: vMonths,
+                        wage: buildWageStr(wMin, wMax, draft.hiringType),
+                        expiryDate: addMonths(draft.postedAt, vMonths),
+                      });
+                      onClose();
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+                  >
+                    <CheckSquare className="w-4 h-4" />確認重新發布
+                  </Button>
+                )}
+                {!isUnpublished && (
+                  <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                    <Save className="w-4 h-4" />儲存修改
+                  </Button>
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -510,6 +989,20 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
         </div>
       </div>
     </>
+  );
+}
+
+function EditSection({ index, title, children }: { index: number; title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-semibold shrink-0">
+          {index}
+        </div>
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</div>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -535,7 +1028,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function JobsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { unreadTalentCount, unreadCount, verificationStatus } = useNotifications();
+  const { verificationStatus } = useNotifications();
   const [showVerifAlert, setShowVerifAlert] = useState(false);
 
   const [jobs, setJobs]               = useState<Job[]>(INITIAL_JOBS);
@@ -578,47 +1071,7 @@ export function JobsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* ── Sidebar ── */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">NewBee</div>
-              <div className="text-xs text-slate-500">商戶平台</div>
-            </div>
-          </div>
-        </div>
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
-            {[
-              { key: "dashboard", icon: <LayoutDashboard className="w-5 h-5" />, label: "工作台",  path: "/dashboard", badge: 0 },
-              { key: "jobs",          icon: <Briefcase className="w-5 h-5" />,     label: "職位管理", path: "/jobs",          badge: 0 },
-              { key: "talent",        icon: <Users className="w-5 h-5" />,         label: "人才管理", path: "/talent",        badge: unreadTalentCount },
-              { key: "stores",        icon: <Store className="w-5 h-5" />,         label: "門店管理", path: "/stores",        badge: 0 },
-              { key: "notifications", icon: <MessageSquare className="w-5 h-5" />, label: "消息中心", path: "/notifications", badge: unreadCount },
-            ].map(item => (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  item.key === "jobs" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </aside>
+      <Sidebar />
 
       {/* ── Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -727,7 +1180,7 @@ export function JobsPage() {
             {/* Table */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full table-fixed min-w-[960px] text-sm">
+                <table className="w-full table-fixed min-w-[1080px] text-sm">
                   {/* Head */}
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -744,15 +1197,16 @@ export function JobsPage() {
                         </th>
                       )}
                       <th className="px-4 py-3 text-left w-[96px]">職位 ID</th>
-                      <th className="px-4 py-3 text-left w-[140px]">職位名稱</th>
-                      <th className="px-4 py-3 text-left w-[120px]">門店</th>
-                      <th className="px-4 py-3 text-left w-[88px]">招聘方式</th>
-                      <th className="px-4 py-3 text-center w-[68px]">招募</th>
-                      <th className="px-4 py-3 text-center w-[68px]">剩餘</th>
+                      <th className="px-4 py-3 text-left w-[130px]">職位名稱</th>
+                      <th className="px-4 py-3 text-left w-[110px]">門店</th>
+                      <th className="px-4 py-3 text-left w-[80px]">招聘方式</th>
+                      <th className="px-4 py-3 text-center w-[60px]">招募</th>
+                      <th className="px-4 py-3 text-center w-[60px]">剩餘</th>
                       <th className="px-4 py-3 text-center w-[68px]">申請</th>
-                      <th className="px-4 py-3 text-left w-[100px]">狀態</th>
-                      <th className="px-4 py-3 text-left w-[104px]">發佈時間</th>
-                      <th className="px-4 py-3 text-left w-[60px]">操作</th>
+                      <th className="px-4 py-3 text-left w-[96px]">狀態</th>
+                      <th className="px-4 py-3 text-left w-[100px]">發佈時間</th>
+                      <th className="px-4 py-3 text-left w-[100px]">截止時間</th>
+                      <th className="px-4 py-3 text-left w-[110px]">操作</th>
                     </tr>
                   </thead>
 
@@ -760,7 +1214,7 @@ export function JobsPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={bulkMode ? 11 : 10} className="py-16 text-center">
+                        <td colSpan={bulkMode ? 12 : 11} className="py-16 text-center">
                           <div className="flex flex-col items-center gap-2 text-slate-400">
                             <Briefcase className="w-8 h-8 text-slate-300" />
                             <span className="text-sm">此分類下暫無職位</span>
@@ -819,9 +1273,17 @@ export function JobsPage() {
                               <span className="text-xs text-slate-400 ml-0.5">人</span>
                             </td>
                             <td className="px-4 py-4 text-center">
-                              <div className="flex items-center justify-center gap-1 text-sm text-slate-600">
-                                <Users className="w-3.5 h-3.5 text-slate-400" />
-                                <span className="font-medium">{job.applications}</span>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="flex items-center justify-center gap-1 text-sm text-slate-600">
+                                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                                  <span className="font-medium">{job.applicants.filter(a => a.appType !== "pool").length || job.applications}</span>
+                                </div>
+                                {job.applicants.filter(a => a.appType === "pool").length > 0 && (
+                                  <div className="flex items-center gap-0.5 text-[10px] text-violet-600 font-medium">
+                                    <Hourglass className="w-2.5 h-2.5" />
+                                    {job.applicants.filter(a => a.appType === "pool").length}
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="px-4 py-4">
@@ -832,12 +1294,36 @@ export function JobsPage() {
                             </td>
                             <td className="px-4 py-4 text-sm text-slate-500 tabular-nums">{job.postedAt}</td>
                             <td className="px-4 py-4">
-                              <button
-                                onClick={() => setDetailJob(job)}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors whitespace-nowrap"
-                              >
-                                管理
-                              </button>
+                              {(() => {
+                                const isExpired = job.expiryDate < new Date().toISOString().slice(0, 10);
+                                return (
+                                  <span className={`text-sm tabular-nums ${
+                                    isExpired
+                                      ? "text-red-500 font-medium"
+                                      : "text-slate-500"
+                                  }`}>
+                                    {job.expiryDate}
+                                    {isExpired && <span className="block text-[10px] text-red-400 font-normal">已過期</span>}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="px-4 py-4">
+                              {job.status === "unpublished" ? (
+                                <button
+                                  onClick={() => setDetailJob(job)}
+                                  className="text-xs text-amber-600 hover:text-amber-700 font-medium transition-colors whitespace-nowrap"
+                                >
+                                  編輯並重新發佈
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setDetailJob(job)}
+                                  className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors whitespace-nowrap"
+                                >
+                                  管理
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );

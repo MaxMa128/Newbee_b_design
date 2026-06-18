@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
-  LayoutDashboard, Briefcase, Users, Store, Building2,
-  Search, Phone, Calendar, ClipboardCheck, CheckCircle2,
+  Users, Search, Phone, Calendar, ClipboardCheck, CheckCircle2,
   XCircle, X, Filter, FileText, GraduationCap, Briefcase as BriefcaseIcon,
-  Award, Globe, Star, ChevronRight, ChevronDown, MessageSquare,
+  Award, Globe, Star, ChevronRight, ChevronDown,
+  Hourglass, UserCheck, Settings, RotateCcw,
 } from "lucide-react";
+import { Sidebar } from "../components/Sidebar";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { NotificationDropdown } from "../components/NotificationDropdown";
 import { useNotifications } from "../contexts/notification-context";
 
 // ── Types ──────────────────────────────────────────────────
-type AppStatus = "待審核" | "已錄用" | "已拒絕";
+type AppStatus = "待審核" | "已錄用" | "已拒絕" | "候選池" | "已撤回";
 
 interface Applicant {
   id: string;
@@ -23,6 +24,7 @@ interface Applicant {
   jobTitle: string;
   store: string;
   appStatus: AppStatus;
+  appType?: "normal" | "pool";
 }
 
 interface Education {
@@ -72,8 +74,11 @@ const MOCK_APPLICANTS: Applicant[] = [
   { id: "APP-012", name: "蔡敏儀", phone: "+852 6234 5670", appliedAt: "2026-06-02", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "已錄用" },
   { id: "APP-013", name: "許志安", phone: "+852 9345 6781", appliedAt: "2026-06-02", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "已錄用" },
   { id: "APP-014", name: "盧嘉欣", phone: "+852 5456 7892", appliedAt: "2026-06-03", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "已錄用" },
-  { id: "APP-015", name: "鍾浩然", phone: "+852 9567 8903", appliedAt: "2026-06-03", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "已錄用" },
-  { id: "APP-016", name: "方翠珊", phone: "+852 6678 9014", appliedAt: "2026-05-21", jobId: "JOB-005", jobTitle: "清潔員",   store: "觀塘辦公室", appStatus: "已拒絕" },
+  { id: "APP-015", name: "鍾浩然", phone: "+852 9567 8903", appliedAt: "2026-06-03", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "已錄用",  appType: "normal" },
+  { id: "APP-020", name: "羅子謙", phone: "+852 9201 3344", appliedAt: "2026-06-04", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "候選池",  appType: "pool" },
+  { id: "APP-021", name: "潘詠琳", phone: "+852 6312 4455", appliedAt: "2026-06-05", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "候選池",  appType: "pool" },
+  { id: "APP-022", name: "葉偉豪", phone: "+852 5423 5566", appliedAt: "2026-06-05", jobId: "JOB-004", jobTitle: "推廣員",   store: "尖沙咀分店", appStatus: "候選池",  appType: "pool" },
+  { id: "APP-016", name: "方翠珊", phone: "+852 6678 9014", appliedAt: "2026-05-21", jobId: "JOB-005", jobTitle: "清潔員",   store: "觀塘辦公室", appStatus: "已拒絕",  appType: "normal" },
   { id: "APP-017", name: "劉嘉穎", phone: "+852 5789 0125", appliedAt: "2026-04-16", jobId: "JOB-006", jobTitle: "客服代表", store: "中環總部",   appStatus: "已錄用" },
   { id: "APP-018", name: "陳俊傑", phone: "+852 9890 1236", appliedAt: "2026-04-17", jobId: "JOB-006", jobTitle: "客服代表", store: "中環總部",   appStatus: "已拒絕" },
   { id: "APP-019", name: "周美玲", phone: "+852 6901 2347", appliedAt: "2026-04-18", jobId: "JOB-006", jobTitle: "客服代表", store: "中環總部",   appStatus: "已拒絕" },
@@ -328,6 +333,38 @@ const MOCK_RESUMES: CandidateResume[] = [
       { name: "證券及期貨從業員資格", remark: "香港證監會認可，2018年考獲", imageUrl: CERT_PLACEHOLDER },
     ],
   },
+  {
+    applicantId: "APP-020",
+    gender: "男", age: 26, languages: ["廣東話", "普通話"],
+    summary: "具兩年銷售及推廣工作經驗，待人友善，積極主動。對推廣行業有熱誠，期望把握機會正式加入團隊。",
+    education: [{ school: "香港專業教育學院", major: "工商管理", level: "副學士", period: "2018年09月–2020年06月" }],
+    workExperience: [
+      { company: "卓悅控股", position: "銷售員", period: "2022年03月–2024年10月", description: "負責店內產品銷售及顧客服務，達成月度銷售目標。" },
+    ],
+    certificates: [],
+  },
+  {
+    applicantId: "APP-021",
+    gender: "女", age: 22, languages: ["廣東話", "英語"],
+    summary: "剛畢業，主修市場推廣，形象整潔，親和力強。擁有校內推廣活動策劃經驗，反應靈活，學習能力佳。",
+    education: [{ school: "香港知專設計學院", major: "市場推廣及廣告", level: "文憑", period: "2021年09月–2024年06月" }],
+    workExperience: [
+      { company: "School Event Team", position: "推廣助理（義務）", period: "2023年03月–2023年12月", description: "協助策劃及執行校園品牌推廣活動，負責現場佈置及人流引導。" },
+    ],
+    certificates: [],
+  },
+  {
+    applicantId: "APP-022",
+    gender: "男", age: 29, languages: ["廣東話", "普通話", "英語"],
+    summary: "具四年零售及推廣工作經驗，熟悉各類型促銷活動操作，溝通能力強，形象專業。曾參與多個大型品牌推廣項目。",
+    education: [{ school: "香港理工大學", major: "市場學", level: "高級文憑", period: "2015年09月–2017年06月" }],
+    workExperience: [
+      { company: "百老匯電器", position: "推廣員", period: "2020年05月–2025年03月", description: "負責門店產品推廣及展示，完成年度銷售指標，獲優秀員工獎。" },
+    ],
+    certificates: [
+      { name: "專業銷售員資格", remark: "香港零售管理協會頒授，2021年", imageUrl: CERT_PLACEHOLDER },
+    ],
+  },
 ];
 
 const RESUME_MAP = new Map(MOCK_RESUMES.map(r => [r.applicantId, r]));
@@ -349,6 +386,8 @@ const STATUS_COLORS: Record<AppStatus, string> = {
   "待審核": "bg-amber-50 text-amber-700 border-amber-200",
   "已錄用": "bg-green-50 text-green-700 border-green-200",
   "已拒絕": "bg-red-50 text-red-600 border-red-200",
+  "候選池": "bg-violet-50 text-violet-700 border-violet-200",
+  "已撤回": "bg-orange-50 text-orange-700 border-orange-200",
 };
 
 type StatusFilter = "all" | AppStatus;
@@ -358,7 +397,32 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: "待審核", label: "待審核" },
   { key: "已錄用", label: "已錄用" },
   { key: "已拒絕", label: "已拒絕" },
+  { key: "候選池", label: "候選池" },
+  { key: "已撤回", label: "已撤回" },
 ];
+
+function FilterSelect({ value, onChange, label, children }: {
+  value: string; onChange: (v: string) => void;
+  label: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className={`h-8 pl-3 pr-7 text-sm border rounded-lg bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors ${
+          value !== "all"
+            ? "border-blue-400 text-blue-700 bg-blue-50"
+            : "border-slate-200 text-slate-600"
+        }`}
+      >
+        <option value="all">{label}</option>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 top-2 w-4 h-4 text-slate-400" />
+    </div>
+  );
+}
 
 // ── Resume Modal ───────────────────────────────────────────
 // HK education level badge colors
@@ -397,9 +461,17 @@ function ResumeModal({
       <DialogContent className="max-w-2xl p-0 gap-0 flex flex-col overflow-hidden max-h-[85vh]">
         {/* Header */}
         <div className="px-6 py-5 pr-14 border-b border-slate-200 shrink-0">
-          <DialogTitle className="text-base font-semibold text-slate-900">候選人在線簡歷</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="text-base font-semibold text-slate-900">候選人在線簡歷</DialogTitle>
+            {applicant.appType === "pool" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 border border-violet-200 text-violet-700 text-xs font-medium">
+                <Hourglass className="w-3 h-3" />候選池
+              </span>
+            )}
+          </div>
           <DialogDescription className="text-xs text-slate-500 mt-0.5">
             {applicant.jobTitle} · {applicant.store}
+            {applicant.appType === "pool" && " · 已招滿職位的後備候選人"}
           </DialogDescription>
         </div>
 
@@ -549,6 +621,14 @@ function ResumeModal({
               <ClipboardCheck className="w-4 h-4" />去審核
             </button>
           )}
+          {applicant.appType === "pool" && applicant.appStatus === "候選池" && onReview && (
+            <button
+              onClick={onReview}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors shrink-0"
+            >
+              <UserCheck className="w-4 h-4" />直接錄用
+            </button>
+          )}
         </div>
       </DialogContent>
 
@@ -618,9 +698,19 @@ function ReviewModal({
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md p-0 gap-0 flex flex-col overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200">
-          <DialogTitle className="text-base font-semibold text-slate-900">審核申請</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="text-base font-semibold text-slate-900">
+              {applicant.appType === "pool" ? "候選池 — 快速錄用" : "審核申請"}
+            </DialogTitle>
+            {applicant.appType === "pool" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 border border-violet-200 text-violet-700 text-xs font-medium">
+                <Hourglass className="w-3 h-3" />候選池
+              </span>
+            )}
+          </div>
           <DialogDescription className="text-sm text-slate-500 mt-0.5">
             {applicant.jobTitle} · {applicant.store}
+            {applicant.appType === "pool" && " · 後備候選人，可直接錄用補位"}
           </DialogDescription>
         </div>
 
@@ -675,7 +765,17 @@ function ReviewModal({
         </div>
 
         <div className="px-6 py-4 border-t border-slate-200 flex gap-3">
-          {step === "main" ? (
+          {applicant.appType === "pool" ? (
+            <>
+              <Button variant="outline" className="flex-1" onClick={onClose}>取消</Button>
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => { onApprove(applicant.id); onClose(); }}
+              >
+                <UserCheck className="w-4 h-4 mr-1.5" />直接錄用
+              </Button>
+            </>
+          ) : step === "main" ? (
             <>
               <Button variant="outline" className="flex-1" onClick={onClose}>取消</Button>
               <Button
@@ -709,20 +809,158 @@ function ReviewModal({
   );
 }
 
+// ── Manage Hired Modal ─────────────────────────────────────
+const REVOKE_REASONS = [
+  { value: "position_change", label: "崗位或平台變動" },
+  { value: "candidate_change", label: "候選人工作變動" },
+];
+
+function ManageHiredModal({
+  applicant,
+  onClose,
+  onRevoke,
+}: {
+  applicant: Applicant;
+  onClose: () => void;
+  onRevoke: (id: string, reason: string, detail: string) => void;
+}) {
+  const [step, setStep] = useState<"main" | "revoke">("main");
+  const [revokeReason, setRevokeReason] = useState(REVOKE_REASONS[0].value);
+  const [revokeDetail, setRevokeDetail] = useState("");
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md p-0 gap-0 flex flex-col overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-200">
+          <DialogTitle className="text-base font-semibold text-slate-900">管理錄用</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500 mt-0.5">
+            {applicant.jobTitle} · {applicant.store}
+          </DialogDescription>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {/* Applicant info */}
+          <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0 ${avatarColor(applicant.id)}`}>
+              {applicant.name[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-slate-900">{applicant.name}</div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{applicant.phone}</span>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-full border text-xs font-medium shrink-0 bg-green-50 text-green-700 border-green-200">
+              已錄用
+            </span>
+          </div>
+
+          {step === "revoke" && (
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">駁回原因</div>
+              <div className="space-y-2">
+                {REVOKE_REASONS.map(r => (
+                  <label
+                    key={r.value}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                      revokeReason === r.value
+                        ? "border-red-400 bg-red-50"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="revokeReason"
+                      value={r.value}
+                      checked={revokeReason === r.value}
+                      onChange={() => setRevokeReason(r.value)}
+                      className="accent-red-600"
+                    />
+                    <span className={`text-sm font-medium ${revokeReason === r.value ? "text-red-700" : "text-slate-700"}`}>
+                      {r.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium text-slate-500">駁回說明（必填）</div>
+                <textarea
+                  rows={3}
+                  placeholder="請詳細說明駁回錄用的原因…"
+                  value={revokeDetail}
+                  onChange={e => setRevokeDetail(e.target.value)}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 flex gap-3">
+          {step === "main" ? (
+            <>
+              <Button variant="outline" className="flex-1" onClick={onClose}>取消</Button>
+              <Button
+                variant="outline"
+                className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                onClick={() => setStep("revoke")}
+              >
+                <RotateCcw className="w-4 h-4 mr-1.5" />駁回錄用
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" className="flex-1" onClick={() => setStep("main")}>返回</Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                disabled={!revokeDetail.trim()}
+                onClick={() => {
+                  const reasonLabel = REVOKE_REASONS.find(r => r.value === revokeReason)?.label ?? revokeReason;
+                  onRevoke(applicant.id, reasonLabel, revokeDetail);
+                  onClose();
+                }}
+              >
+                確認駁回錄用
+              </Button>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────
 export function TalentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { unreadTalentCount, unreadApplicantIds, markApplicantRead, unreadCount } = useNotifications();
+  const { unreadApplicantIds, markApplicantRead } = useNotifications();
 
   const [applicants, setApplicants] = useState<Applicant[]>(MOCK_APPLICANTS);
   const [activeTab, setActiveTab]   = useState<StatusFilter>("all");
   const [search, setSearch]         = useState("");
-  const [storeFilter, setStoreFilter] = useState("all");
+  const [storeFilter, setStoreFilter]       = useState("all");
+  const [genderFilter, setGenderFilter]     = useState("all");
+  const [educationFilter, setEducationFilter] = useState("all");
+  const [ageMin, setAgeMin] = useState("");
+  const [ageMax, setAgeMax] = useState("");
+  const [jobFilter, setJobFilter]           = useState("all");
   const [reviewTarget, setReviewTarget] = useState<Applicant | null>(null);
   const [resumeTarget, setResumeTarget] = useState<Applicant | null>(null);
+  const [manageTarget, setManageTarget] = useState<Applicant | null>(null);
+  const [revokeDetails, setRevokeDetails] = useState<Map<string, { reason: string; detail: string }>>(new Map());
+  const [viewRevokeTarget, setViewRevokeTarget] = useState<Applicant | null>(null);
 
   const allStores = Array.from(new Set(MOCK_APPLICANTS.map(a => a.store))).sort();
+  const allJobs   = Array.from(new Map(MOCK_APPLICANTS.map(a => [a.jobId, a.jobTitle])).entries());
+
+  const getResume = (id: string) => MOCK_RESUMES.find(r => r.applicantId === id);
+
+  const matchAge = (age: number) => {
+    if (ageMin && age < Number(ageMin)) return false;
+    if (ageMax && age > Number(ageMax)) return false;
+    return true;
+  };
 
   // Deep-link: open review panel for a specific applicant (e.g. from jobs-page "去審核")
   useEffect(() => {
@@ -734,65 +972,48 @@ export function TalentPage() {
   }, []);
 
   const filtered = applicants.filter(a => {
+    const resume = getResume(a.id);
     const matchTab    = activeTab === "all" || a.appStatus === activeTab;
     const matchStore  = storeFilter === "all" || a.store === storeFilter;
+    const matchJob    = jobFilter === "all" || a.jobId === jobFilter;
+    const matchGender = genderFilter === "all" || resume?.gender === genderFilter;
+    const matchEdu    = educationFilter === "all" || (resume?.education[0]?.level ?? "") === educationFilter;
+    const matchAgeVal = matchAge(resume?.age ?? 0);
     const matchSearch = !search || a.name.includes(search) || a.phone.includes(search) || a.jobTitle.includes(search);
-    return matchTab && matchStore && matchSearch;
+    return matchTab && matchStore && matchJob && matchGender && matchEdu && matchAgeVal && matchSearch;
   });
 
   const countByStatus = (s: StatusFilter) =>
     s === "all" ? applicants.length : applicants.filter(a => a.appStatus === s).length;
 
+  const [actionToast, setActionToast] = useState<{ type: "approve" | "reject" | "pool-hire" | "revoke-hire"; name: string } | null>(null);
+
+  const showToast = (type: "approve" | "reject" | "pool-hire" | "revoke-hire", name: string) => {
+    setActionToast({ type, name });
+    setTimeout(() => setActionToast(null), 3000);
+  };
+
   const handleApprove = (id: string) => {
-    setApplicants(prev => prev.map(a => a.id === id ? { ...a, appStatus: "已錄用" } : a));
+    const a = applicants.find(ap => ap.id === id);
+    const name = a?.name ?? "";
+    setApplicants(prev => prev.map(ap => ap.id === id ? { ...ap, appStatus: "已錄用" } : ap));
+    showToast(a?.appType === "pool" ? "pool-hire" : "approve", name);
   };
   const handleReject = (id: string, _reason: string) => {
+    const name = applicants.find(a => a.id === id)?.name ?? "";
     setApplicants(prev => prev.map(a => a.id === id ? { ...a, appStatus: "已拒絕" } : a));
+    showToast("reject", name);
+  };
+  const handleRevokeHire = (id: string, reason: string, detail: string) => {
+    const name = applicants.find(a => a.id === id)?.name ?? "";
+    setApplicants(prev => prev.map(a => a.id === id ? { ...a, appStatus: "已撤回" } : a));
+    setRevokeDetails(prev => new Map(prev).set(id, { reason, detail }));
+    showToast("revoke-hire", name);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">NewBee</div>
-              <div className="text-xs text-slate-500">商戶平台</div>
-            </div>
-          </div>
-        </div>
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
-            {[
-              { key: "dashboard",     icon: <LayoutDashboard className="w-5 h-5" />, label: "工作台",  path: "/dashboard",      badge: 0 },
-              { key: "jobs",          icon: <Briefcase className="w-5 h-5" />,       label: "職位管理", path: "/jobs",          badge: 0 },
-              { key: "talent",        icon: <Users className="w-5 h-5" />,           label: "人才管理", path: "/talent",        badge: unreadTalentCount },
-              { key: "stores",        icon: <Store className="w-5 h-5" />,           label: "門店管理", path: "/stores",        badge: 0 },
-              { key: "notifications", icon: <MessageSquare className="w-5 h-5" />,   label: "消息中心", path: "/notifications", badge: unreadCount },
-            ].map(item => (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  item.key === "talent" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </aside>
+      <Sidebar />
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -800,45 +1021,121 @@ export function TalentPage() {
         <header className="bg-white border-b border-slate-200 px-8 py-4 shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">人才管理</h1>
-              <p className="text-sm text-slate-500 mt-0.5">管理所有職位的求職申請</p>
+              <h1 className="text-xl font-semibold text-slate-900">求職記錄</h1>
+              <p className="text-sm text-slate-500 mt-0.5">管理所有職位的求職申請記錄</p>
             </div>
             <NotificationDropdown />
           </div>
         </header>
 
+        {/* Action toast */}
+        {actionToast && (
+          <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${
+            actionToast.type === "reject" || actionToast.type === "revoke-hire"
+              ? "bg-red-50 border-red-200 text-red-800"
+              : actionToast.type === "pool-hire"
+              ? "bg-violet-50 border-violet-200 text-violet-800"
+              : "bg-green-50 border-green-200 text-green-800"
+          }`}>
+            {(actionToast.type === "reject" || actionToast.type === "revoke-hire")
+              ? <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+              : actionToast.type === "pool-hire"
+              ? <UserCheck className="w-4 h-4 text-violet-500 shrink-0" />
+              : <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+            }
+            <span>
+              <span className="font-semibold">{actionToast.name}</span>
+              {actionToast.type === "approve" ? " 已成功錄用"
+                : actionToast.type === "pool-hire" ? " 已從候選池錄用補位"
+                : actionToast.type === "revoke-hire" ? " 錄用已被駁回"
+                : " 已被駁回"}
+            </span>
+          </div>
+        )}
+
         <main className="flex-1 p-8 overflow-auto">
           <div className="max-w-full">
 
             {/* Filters bar */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative flex-1 max-w-xs">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="搜尋姓名、電話或職位…"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                    <X className="w-3.5 h-3.5" />
+            <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 space-y-3 shadow-sm">
+              {/* Row 1: search + store + job */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-[180px] max-w-xs">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="搜尋姓名、電話或職位…"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {/* Store */}
+                <FilterSelect value={storeFilter} onChange={setStoreFilter} label="全部門店">
+                  {allStores.map(s => <option key={s} value={s}>{s}</option>)}
+                </FilterSelect>
+                {/* Job */}
+                <FilterSelect value={jobFilter} onChange={setJobFilter} label="全部職位">
+                  {allJobs.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
+                </FilterSelect>
+              </div>
+              {/* Row 2: gender + education + age */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                  <Filter className="w-3.5 h-3.5" />候選人
+                </span>
+                {/* Gender */}
+                <FilterSelect value={genderFilter} onChange={setGenderFilter} label="性別不限">
+                  <option value="男">男</option>
+                  <option value="女">女</option>
+                </FilterSelect>
+                {/* Education */}
+                <FilterSelect value={educationFilter} onChange={setEducationFilter} label="學歷不限">
+                  <option value="中學">中學</option>
+                  <option value="文憑">文憑</option>
+                  <option value="職業訓練證書">職業訓練證書</option>
+                  <option value="副學士">副學士</option>
+                  <option value="高級文憑">高級文憑</option>
+                  <option value="學士">學士</option>
+                  <option value="碩士">碩士</option>
+                </FilterSelect>
+                {/* Age range */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500 shrink-0">年齡</span>
+                  <input
+                    type="number"
+                    min={16}
+                    max={99}
+                    placeholder="最小"
+                    value={ageMin}
+                    onChange={e => setAgeMin(e.target.value)}
+                    className="w-16 h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                  />
+                  <span className="text-xs text-slate-400">–</span>
+                  <input
+                    type="number"
+                    min={16}
+                    max={99}
+                    placeholder="最大"
+                    value={ageMax}
+                    onChange={e => setAgeMax(e.target.value)}
+                    className="w-16 h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                  />
+                  <span className="text-xs text-slate-400 shrink-0">歲</span>
+                </div>
+                {/* Clear all */}
+                {(genderFilter !== "all" || educationFilter !== "all" || ageMin !== "" || ageMax !== "" || storeFilter !== "all" || jobFilter !== "all") && (
+                  <button
+                    onClick={() => { setGenderFilter("all"); setEducationFilter("all"); setAgeMin(""); setAgeMax(""); setStoreFilter("all"); setJobFilter("all"); }}
+                    className="text-xs text-slate-400 hover:text-red-500 transition-colors ml-1"
+                  >
+                    清除篩選
                   </button>
                 )}
-              </div>
-              <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                <Filter className="w-4 h-4" />
-                <div className="relative">
-                  <select
-                    value={storeFilter}
-                    onChange={e => setStoreFilter(e.target.value)}
-                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-8"
-                  >
-                    <option value="all">全部門店</option>
-                    {allStores.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-4 h-4 text-slate-400" />
-                </div>
               </div>
             </div>
 
@@ -866,11 +1163,13 @@ export function TalentPage() {
             {/* Table */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full table-fixed min-w-[860px] text-sm">
+                <table className="w-full table-fixed min-w-[1020px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       <th className="px-4 py-3 text-left w-[120px]">申請者</th>
                       <th className="px-4 py-3 text-left w-[130px]">聯絡電話</th>
+                      <th className="px-4 py-3 text-center w-[60px]">性別</th>
+                      <th className="px-4 py-3 text-center w-[60px]">年齡</th>
                       <th className="px-4 py-3 text-left w-[110px]">申請職位</th>
                       <th className="px-4 py-3 text-left w-[110px]">門店</th>
                       <th className="px-4 py-3 text-left w-[100px]">申請時間</th>
@@ -881,7 +1180,7 @@ export function TalentPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-16 text-center">
+                        <td colSpan={9} className="py-16 text-center">
                           <div className="flex flex-col items-center gap-2 text-slate-400">
                             <Users className="w-8 h-8 text-slate-300" />
                             <span className="text-sm">暫無符合條件的申請記錄</span>
@@ -890,12 +1189,13 @@ export function TalentPage() {
                       </tr>
                     ) : filtered.map(a => {
                       const isUnread = unreadApplicantIds.has(a.id);
+                      const resume = getResume(a.id);
                       return (
                       <tr key={a.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors ${isUnread ? "bg-red-50/30" : ""}`}>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2.5">
                             <div className="relative shrink-0">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(a.id)}`}>
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${a.appType === "pool" ? "bg-violet-100 text-violet-700" : avatarColor(a.id)}`}>
                                 {a.name[0]}
                               </div>
                               {isUnread && (
@@ -906,9 +1206,28 @@ export function TalentPage() {
                             {isUnread && (
                               <span className="text-[10px] bg-red-100 text-red-600 font-semibold px-1.5 py-0.5 rounded-full leading-none">新</span>
                             )}
+                            {a.appType === "pool" && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-violet-100 text-violet-600 font-semibold px-1.5 py-0.5 rounded-full leading-none border border-violet-200">
+                                <Hourglass className="w-2.5 h-2.5" />候選池
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-slate-600 tabular-nums">{a.phone}</td>
+                        <td className="px-4 py-3.5 text-center">
+                          {resume ? (
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded-full border font-medium ${
+                              resume.gender === "女"
+                                ? "bg-pink-50 text-pink-600 border-pink-200"
+                                : "bg-blue-50 text-blue-600 border-blue-200"
+                            }`}>{resume.gender}</span>
+                          ) : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          {resume
+                            ? <span className="text-sm text-slate-700">{resume.age}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
                         <td className="px-4 py-3.5">
                           <div className="text-slate-900">{a.jobTitle}</div>
                           <div className="text-xs text-slate-400 mt-0.5">{a.jobId}</div>
@@ -921,7 +1240,7 @@ export function TalentPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <button
                               onClick={() => { setResumeTarget(a); markApplicantRead(a.id); }}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-50 hover:border-slate-300 transition-colors"
@@ -934,6 +1253,30 @@ export function TalentPage() {
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
                               >
                                 <ClipboardCheck className="w-3 h-3" />去審核
+                              </button>
+                            )}
+                            {a.appStatus === "已錄用" && (
+                              <button
+                                onClick={() => { setManageTarget(a); markApplicantRead(a.id); }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-slate-300 bg-slate-50 text-slate-700 text-xs font-medium hover:bg-slate-100 transition-colors"
+                              >
+                                <Settings className="w-3 h-3" />去管理
+                              </button>
+                            )}
+                            {a.appStatus === "已撤回" && revokeDetails.has(a.id) && (
+                              <button
+                                onClick={() => setViewRevokeTarget(a)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-orange-200 bg-orange-50 text-orange-700 text-xs font-medium hover:bg-orange-100 transition-colors"
+                              >
+                                <FileText className="w-3 h-3" />查看原因
+                              </button>
+                            )}
+                            {a.appType === "pool" && a.appStatus === "候選池" && (
+                              <button
+                                onClick={() => { setReviewTarget(a); markApplicantRead(a.id); }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-violet-300 bg-violet-50 text-violet-700 text-xs font-medium hover:bg-violet-100 transition-colors"
+                              >
+                                <UserCheck className="w-3 h-3" />快速補位
                               </button>
                             )}
                           </div>
@@ -957,7 +1300,7 @@ export function TalentPage() {
         <ResumeModal
           applicant={resumeTarget}
           onClose={() => setResumeTarget(null)}
-          onReview={resumeTarget.appStatus === "待審核" ? () => {
+          onReview={(resumeTarget.appStatus === "待審核" || resumeTarget.appType === "pool") ? () => {
             setReviewTarget(resumeTarget);
             setResumeTarget(null);
           } : undefined}
@@ -977,6 +1320,63 @@ export function TalentPage() {
           }}
         />
       )}
+
+      {/* Manage Hired Modal */}
+      {manageTarget && (
+        <ManageHiredModal
+          applicant={manageTarget}
+          onClose={() => setManageTarget(null)}
+          onRevoke={handleRevokeHire}
+        />
+      )}
+
+      {/* View Revoke Reason Dialog */}
+      {viewRevokeTarget && (() => {
+        const info = revokeDetails.get(viewRevokeTarget.id);
+        return (
+          <Dialog open onOpenChange={() => setViewRevokeTarget(null)}>
+            <DialogContent className="max-w-sm p-0 gap-0 flex flex-col overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-200">
+                <DialogTitle className="text-base font-semibold text-slate-900">驳回錄用原因</DialogTitle>
+                <DialogDescription className="text-sm text-slate-500 mt-0.5">
+                  {viewRevokeTarget.jobTitle} · {viewRevokeTarget.store}
+                </DialogDescription>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold shrink-0 ${avatarColor(viewRevokeTarget.id)}`}>
+                    {viewRevokeTarget.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900 text-sm">{viewRevokeTarget.name}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                      <Phone className="w-3 h-3" />{viewRevokeTarget.phone}
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full border text-xs font-medium bg-orange-50 text-orange-700 border-orange-200 shrink-0">
+                    已撤回
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">驳回類型</div>
+                    <div className="text-sm text-slate-900 font-medium">{info?.reason}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">驳回說明</div>
+                    <div className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-100">
+                      {info?.detail}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-slate-200">
+                <Button variant="outline" className="w-full" onClick={() => setViewRevokeTarget(null)}>關閉</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

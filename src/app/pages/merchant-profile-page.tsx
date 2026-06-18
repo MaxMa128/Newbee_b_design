@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
 import {
-  ArrowLeft, LayoutDashboard, Briefcase, Users, Store, Building2,
+  ArrowLeft,
   Upload, FileText, ImageIcon, AlertTriangle, CheckCircle2, Send,
-  ChevronDown, Bell, MessageSquare,
+  ChevronDown, Bell,
 } from "lucide-react";
+import { Sidebar } from "../components/Sidebar";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -134,6 +135,7 @@ export function MerchantProfilePage() {
 
   // Form fields
   const [companyName, setCompanyName]         = useState("");
+  const [companyNameEn, setCompanyNameEn]     = useState("");
   const [companyIntro, setCompanyIntro]       = useState("");
   const [companyIndustry, setCompanyIndustry] = useState("");
   const [industryOther, setIndustryOther]     = useState("");
@@ -209,50 +211,11 @@ export function MerchantProfilePage() {
     navigate("/dashboard", { state: { verificationSubmitted: true } });
   };
 
-  const navItems = [
-    { key: "dashboard",    icon: <LayoutDashboard className="w-5 h-5" />, label: "工作台",  path: "/dashboard", badge: 0 },
-    { key: "jobs",         icon: <Briefcase className="w-5 h-5" />,       label: "職位管理", path: "/jobs",      badge: 0 },
-    { key: "talent",       icon: <Users className="w-5 h-5" />,           label: "人才管理", path: "/talent",    badge: unreadTalentCount },
-    { key: "stores",       icon: <Store className="w-5 h-5" />,           label: "門店管理", path: "/stores",    badge: 0 },
-    { key: "notifications",icon: <MessageSquare className="w-5 h-5" />,   label: "消息中心", path: "/notifications", badge: unreadCount },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
 
-      {/* ── Sidebar ── */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">NewBee</div>
-              <div className="text-xs text-slate-500">商戶平台</div>
-            </div>
-          </div>
-        </div>
-        <nav className="flex-1 p-4">
-          <div className="space-y-1">
-            {navItems.map(item => (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.path)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-50"
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </aside>
+      <Sidebar />
 
       {/* ── Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -315,7 +278,9 @@ export function MerchantProfilePage() {
               <SectionCard index={1} title="基本資料" desc="填寫公司基本信息，展示給求職者的公司形象">
                 <div className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="v-company-name">公司名稱 / 品牌</Label>
+                    <Label htmlFor="v-company-name">
+                      公司名稱 / 品牌<span className="text-red-500 ml-0.5">*</span>
+                    </Label>
                     <Input
                       id="v-company-name"
                       placeholder="輸入公司名稱或品牌名稱"
@@ -324,6 +289,21 @@ export function MerchantProfilePage() {
                       onChange={e => setCompanyName(e.target.value)}
                       className="disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-slate-50"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="v-company-name-en">
+                      公司名稱 / 品牌英文名<span className="text-red-500 ml-0.5">*</span>
+                    </Label>
+                    <Input
+                      id="v-company-name-en"
+                      placeholder="Enter company or brand name in English"
+                      disabled={viewOnly}
+                      value={companyNameEn}
+                      onChange={e => setCompanyNameEn(e.target.value)}
+                      className="disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    />
+                    <p className="text-xs text-slate-400">請以英文填寫，用於對外展示及官方文件（例：NewBee Technology Limited）</p>
                   </div>
 
                   <div className="space-y-2">
