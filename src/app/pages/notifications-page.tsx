@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import {
-  Bell, CheckCheck, ArrowRight,
+  Bell, CheckCheck, ArrowRight, Users,
   Briefcase as BriefcaseIcon, Settings,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -12,18 +12,13 @@ import { useNotifications, type Notification } from "../contexts/notification-co
 // ── Types ─────────────────────────────────────────────────
 
 type ReadTab     = "all" | "unread";
-type CategoryTab = "all" | "talent" | "system";
+type CategoryTab = "all" | "system" | "position" | "attendance" | "finance";
 
 // ── Helpers ────────────────────────────────────────────────
 
-function categoryLabel(tab: CategoryTab) {
-  if (tab === "talent") return "求職申請";
-  if (tab === "system") return "系統通知";
-  return "全部種類";
-}
-
-function notifCategory(n: Notification): "talent" | "system" {
-  return n.type === "talent" ? "talent" : "system";
+function notifCategory(n: Notification): Exclude<CategoryTab, "all"> {
+  if (n.type === "talent") return "position";
+  return "system";
 }
 
 function NotifCard({
@@ -73,27 +68,15 @@ function NotifCard({
         {!notif.read && (
           null
         )}
-        {isTalent && onReview && (
-          <Button
-            size="sm"
-            onClick={() => { onMarkRead(); onReview(); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-3 gap-1"
-          >
-            去審核
-            <ArrowRight className="w-3 h-3" />
-          </Button>
-        )}
-        {!isTalent && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => { onMarkRead(); onNavigate(); }}
-            className="text-xs h-8 px-3 gap-1 border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200"
-          >
-            查看詳情
-            <ArrowRight className="w-3 h-3" />
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => { onMarkRead(); if (isTalent && onReview) onReview(); else onNavigate(); }}
+          className="text-xs h-8 px-3 gap-1 border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200"
+        >
+          查看詳情
+          <ArrowRight className="w-3 h-3" />
+        </Button>
       </div>
     </div>
   );
@@ -191,12 +174,16 @@ export function NotificationsPage() {
             </div>
 
             {/* ── Category filter pills ── */}
-            <div className="flex items-center gap-2 mb-5">
+            <div className="flex items-center gap-2 mb-5 flex-wrap">
               {([
-                { key: "all",    label: "全部種類",  unread: unreadForCategory("all") },
-                { key: "talent", label: "求職申請",  unread: unreadForCategory("talent") },
-                { key: "system", label: "系統通知",  unread: unreadForCategory("system") },
-              ] as { key: CategoryTab; label: string; unread: number }[]).map(cat => (
+                { key: "all",        label: "全部種類" },
+                { key: "system",     label: "系統通知" },
+                { key: "position",   label: "崗位通知" },
+                { key: "attendance", label: "考勤排班" },
+                { key: "finance",    label: "財務結算" },
+              ] as { key: CategoryTab; label: string }[]).map(cat => {
+                const unread = unreadForCategory(cat.key);
+                return (
                 <button
                   key={cat.key}
                   onClick={() => setCategoryTab(cat.key)}
@@ -207,17 +194,16 @@ export function NotificationsPage() {
                   }`}
                 >
                   {cat.label}
-                  {cat.unread > 0 && (
+                  {unread > 0 && (
                     <span className={`text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-full ${
-                      categoryTab === cat.key
-                        ? "bg-white/20 text-white"
-                        : "bg-red-100 text-red-600"
+                      categoryTab === cat.key ? "bg-white/20 text-white" : "bg-red-100 text-red-600"
                     }`}>
-                      {cat.unread}
+                      {unread}
                     </span>
                   )}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {/* ── Notification list ── */}

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router";
 import {
   LayoutDashboard, Briefcase, Users, Store, Building2,
   MessageSquare, ChevronDown, ClipboardList, Briefcase as WorkIcon,
-  Megaphone, FileText,
+  Megaphone, FileText, CalendarDays, ClipboardCheck, CalendarClock,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useNotifications } from "../contexts/notification-context";
@@ -14,7 +14,8 @@ interface SidebarProps {
 }
 
 const RECRUITMENT_PATHS = ["/jobs", "/stores", "/create-job"];
-const TALENT_PATHS = ["/talent", "/work-records"];
+const TALENT_PATHS      = ["/talent", "/work-records"];
+const SCHEDULE_PATHS    = ["/schedule", "/attendance"];
 
 export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
   const navigate = useNavigate();
@@ -28,6 +29,9 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
   );
   const [talentOpen, setTalentOpen] = useState(
     TALENT_PATHS.includes(path)
+  );
+  const [scheduleOpen, setScheduleOpen] = useState(
+    SCHEDULE_PATHS.includes(path)
   );
 
   const isActive = (p: string) => path === p || path.startsWith(p + "/");
@@ -92,7 +96,8 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
   );
 
   const isRecruitmentActive = RECRUITMENT_PATHS.some(p => path === p || path.startsWith(p + "/"));
-  const isTalentActive = TALENT_PATHS.some(p => path === p);
+  const isTalentActive      = TALENT_PATHS.some(p => path === p);
+  const isScheduleActive    = SCHEDULE_PATHS.some(p => path === p);
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
@@ -165,6 +170,33 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                   navPath="/work-records"
                   icon={<FileText className="w-4 h-4" />}
                   label="工作記錄"
+                  indent
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 考勤排班 group */}
+          <div>
+            <GroupHeader
+              icon={<CalendarClock className="w-4.5 h-4.5" />}
+              label="考勤排班"
+              open={scheduleOpen}
+              onToggle={() => setScheduleOpen(o => !o)}
+              hasActive={isScheduleActive}
+            />
+            {scheduleOpen && (
+              <div className="mt-0.5 space-y-0.5">
+                <NavItem
+                  navPath="/schedule"
+                  icon={<CalendarDays className="w-4 h-4" />}
+                  label="排班管理"
+                  indent
+                />
+                <NavItem
+                  navPath="/attendance"
+                  icon={<ClipboardCheck className="w-4 h-4" />}
+                  label="考勤管理"
                   indent
                 />
               </div>

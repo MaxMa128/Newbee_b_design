@@ -1,167 +1,322 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import {
-  FileText, Users, Search, X, Filter, ChevronDown, Clock,
-  MapPin, Phone, Calendar, CheckCircle2, XCircle, Hourglass,
-  Building2,
+  FileText, Search, X, Phone, MapPin, Calendar,
+  Award, XCircle, ArrowLeft,
+  AlertTriangle, ClipboardList, RotateCcw, Briefcase,
+  ChevronDown, Users, ChevronRight,
 } from "lucide-react";
-import { NotificationDropdown } from "../components/NotificationDropdown";
 import { Sidebar } from "../components/Sidebar";
-
-// ── Types ──────────────────────────────────────────────────
-type WorkStatus = "在職" | "已完成" | "已離職" | "異常終止";
-
-interface WorkRecord {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  phone: string;
-  gender: "男" | "女";
-  age: number;
-  jobId: string;
-  jobTitle: string;
-  hiringType: "全職" | "兼職" | "臨時工";
-  store: string;
-  district: string;
-  startDate: string;
-  endDate?: string;
-  status: WorkStatus;
-  totalDays?: number;
-  wage: string;
-}
-
-// ── Mock data ──────────────────────────────────────────────
-const MOCK_WORK_RECORDS: WorkRecord[] = [
-  {
-    id: "WR-001", employeeId: "APP-001", employeeName: "陳大文", phone: "+852 9123 4567", gender: "男", age: 28,
-    jobId: "JOB-001", jobTitle: "收銀員", hiringType: "兼職", store: "旺角分店", district: "旺角",
-    startDate: "2026-06-10", status: "在職", wage: "HK$ 65 / 小時",
-  },
-  {
-    id: "WR-002", employeeId: "APP-007", employeeName: "黃曉恩", phone: "+852 5789 0123", gender: "女", age: 24,
-    jobId: "JOB-003", jobTitle: "侍應生", hiringType: "臨時工", store: "中環分店", district: "中環",
-    startDate: "2026-07-05", endDate: "2026-07-12", status: "已完成", totalDays: 2, wage: "HK$ 70 / 小時",
-  },
-  {
-    id: "WR-003", employeeId: "APP-008", employeeName: "林嘉慧", phone: "+852 9890 1234", gender: "女", age: 27,
-    jobId: "JOB-003", jobTitle: "侍應生", hiringType: "臨時工", store: "中環分店", district: "中環",
-    startDate: "2026-07-05", endDate: "2026-07-12", status: "已完成", totalDays: 2, wage: "HK$ 70 / 小時",
-  },
-  {
-    id: "WR-004", employeeId: "APP-012", employeeName: "蔡敏儀", phone: "+852 6234 5670", gender: "女", age: 25,
-    jobId: "JOB-004", jobTitle: "推廣員", hiringType: "臨時工", store: "尖沙咀分店", district: "尖沙咀",
-    startDate: "2026-07-01", endDate: "2026-07-03", status: "已完成", totalDays: 3, wage: "HK$ 80 / 小時",
-  },
-  {
-    id: "WR-005", employeeId: "APP-013", employeeName: "許志安", phone: "+852 9345 6781", gender: "男", age: 30,
-    jobId: "JOB-004", jobTitle: "推廣員", hiringType: "臨時工", store: "尖沙咀分店", district: "尖沙咀",
-    startDate: "2026-07-01", endDate: "2026-07-03", status: "已完成", totalDays: 3, wage: "HK$ 80 / 小時",
-  },
-  {
-    id: "WR-006", employeeId: "APP-014", employeeName: "盧嘉欣", phone: "+852 5456 7892", gender: "女", age: 21,
-    jobId: "JOB-004", jobTitle: "推廣員", hiringType: "臨時工", store: "尖沙咀分店", district: "尖沙咀",
-    startDate: "2026-07-01", endDate: "2026-07-02", status: "異常終止", wage: "HK$ 80 / 小時",
-  },
-  {
-    id: "WR-007", employeeId: "APP-017", employeeName: "劉嘉穎", phone: "+852 5789 0125", gender: "女", age: 29,
-    jobId: "JOB-006", jobTitle: "客服代表", hiringType: "全職", store: "中環總部", district: "中環",
-    startDate: "2026-05-01", status: "在職", wage: "HK$ 18,000 / 月",
-  },
-  {
-    id: "WR-008", employeeId: "APP-015", employeeName: "鍾浩然", phone: "+852 9567 8903", gender: "男", age: 27,
-    jobId: "JOB-004", jobTitle: "推廣員", hiringType: "臨時工", store: "尖沙咀分店", district: "尖沙咀",
-    startDate: "2026-07-01", endDate: "2026-07-03", status: "已完成", totalDays: 3, wage: "HK$ 80 / 小時",
-  },
-];
+import { NotificationDropdown } from "../components/NotificationDropdown";
+import { Button } from "../components/ui/button";
+import {
+  CANDIDATE_HISTORIES, CANDIDATE_HISTORY_MAP,
+  getHistoryStats,
+  type CandidateHistory, type HistoryEntry, type EntryStatus,
+} from "../data/candidateHistory";
 
 // ── Config ─────────────────────────────────────────────────
-const STATUS_COLORS: Record<WorkStatus, string> = {
-  "在職":   "bg-green-50 text-green-700 border-green-200",
-  "已完成": "bg-blue-50 text-blue-700 border-blue-200",
-  "已離職": "bg-slate-100 text-slate-500 border-slate-200",
-  "異常終止": "bg-red-50 text-red-600 border-red-200",
-};
-const STATUS_DOTS: Record<WorkStatus, string> = {
-  "在職":   "bg-green-500 animate-pulse",
-  "已完成": "bg-blue-400",
-  "已離職": "bg-slate-400",
-  "異常終止": "bg-red-500",
-};
-const HIRING_COLORS: Record<WorkRecord["hiringType"], string> = {
-  "全職":   "bg-blue-50 text-blue-700 border-blue-200",
-  "兼職":   "bg-indigo-50 text-indigo-700 border-indigo-200",
-  "臨時工": "bg-violet-50 text-violet-700 border-violet-200",
+const STATUS_CFG: Record<EntryStatus, { color: string; dot: string; label: string }> = {
+  "已錄用":  { color: "bg-green-50 text-green-700 border-green-200",    dot: "bg-green-500",           label: "已錄用" },
+  "已拒絕":  { color: "bg-red-50 text-red-600 border-red-200",          dot: "bg-red-500",             label: "已拒絕" },
+  "已撤回":  { color: "bg-orange-50 text-orange-700 border-orange-200", dot: "bg-orange-500",          label: "已撤回" },
+  "待審核":  { color: "bg-amber-50 text-amber-700 border-amber-200",    dot: "bg-amber-400",           label: "待審核" },
+  "在職":   { color: "bg-green-50 text-green-700 border-green-200",    dot: "bg-green-500 animate-pulse", label: "在職中" },
+  "已完成":  { color: "bg-blue-50 text-blue-700 border-blue-200",       dot: "bg-blue-400",            label: "已完成離職" },
+  "異常終止": { color: "bg-red-50 text-red-600 border-red-200",          dot: "bg-red-500",             label: "異常終止" },
 };
 
-type StatusFilter = "all" | WorkStatus;
+const HIRING_COLORS: Record<"全職" | "兼職" | "臨時工", string> = {
+  "全職":   "bg-blue-50 text-blue-600 border-blue-200",
+  "兼職":   "bg-indigo-50 text-indigo-600 border-indigo-200",
+  "臨時工": "bg-violet-50 text-violet-600 border-violet-200",
+};
 
-const STATUS_TABS: { key: StatusFilter; label: string }[] = [
-  { key: "all",    label: "全部" },
-  { key: "在職",   label: "在職" },
-  { key: "已完成", label: "已完成" },
-  { key: "已離職", label: "已離職" },
-  { key: "異常終止", label: "異常終止" },
+const AVATAR_COLORS = [
+  "bg-blue-100 text-blue-700", "bg-violet-100 text-violet-700",
+  "bg-emerald-100 text-emerald-700", "bg-rose-100 text-rose-700",
+  "bg-amber-100 text-amber-700", "bg-cyan-100 text-cyan-700",
 ];
+function avatarColor(id: string) {
+  return AVATAR_COLORS[parseInt(id.replace("APP-", ""), 10) % AVATAR_COLORS.length];
+}
 
-function FilterSelect({ value, onChange, label, children }: {
-  value: string; onChange: (v: string) => void;
-  label: string; children: React.ReactNode;
-}) {
+// ── Individual history entry in timeline ───────────────────
+function HistoryEntryCard({ entry, isLast }: { entry: HistoryEntry; isLast: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = STATUS_CFG[entry.status];
+  const hasDetail = !!(entry.rejectReason || entry.revokeDetail || entry.evaluation || entry.terminationReason);
+
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className={`h-8 pl-3 pr-7 text-sm border rounded-lg bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors ${
-          value !== "all" ? "border-blue-400 text-blue-700 bg-blue-50" : "border-slate-200 text-slate-600"
-        }`}
-      >
-        <option value="all">{label}</option>
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-2 w-4 h-4 text-slate-400" />
+    <div className="flex gap-3.5">
+      {/* Timeline spine */}
+      <div className="flex flex-col items-center shrink-0 mt-1">
+        <div className={`w-2.5 h-2.5 rounded-full border-2 border-white ring-2 ring-slate-200 shrink-0 ${cfg.dot}`} />
+        {!isLast && <div className="w-px flex-1 bg-slate-200 mt-1.5 min-h-[28px]" />}
+      </div>
+
+      {/* Card */}
+      <div className={`flex-1 min-w-0 ${isLast ? "pb-2" : "pb-5"}`}>
+        {/* Kind label + date */}
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5">
+            {entry.kind === "application" ? (
+              <ClipboardList className="w-3.5 h-3.5 text-violet-400" />
+            ) : (
+              <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+            )}
+            <span className="text-xs font-medium text-slate-500">
+              {entry.kind === "application" ? "申請記錄" : "在職記錄"}
+            </span>
+          </div>
+          <span className="text-xs text-slate-400 tabular-nums shrink-0">{entry.date}</span>
+        </div>
+
+        <div className="bg-white border border-slate-100 rounded-xl p-3.5 shadow-sm">
+          {/* Job + status */}
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900">{entry.jobTitle}</div>
+              <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-500 flex-wrap">
+                <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{entry.store}</span>
+                <span className="text-slate-300">·</span>
+                <span className={`inline-flex px-1.5 py-0.5 rounded-full border text-[10px] font-medium ${HIRING_COLORS[entry.hiringType]}`}>
+                  {entry.hiringType}
+                </span>
+              </div>
+              {entry.kind === "employment" && (
+                <div className="flex items-center gap-1 mt-1 text-xs text-slate-400">
+                  <Calendar className="w-3 h-3" />
+                  <span>{entry.date}</span>
+                  <span>→</span>
+                  <span>{entry.endDate ?? "進行中"}</span>
+                  {entry.durationLabel && (
+                    <span className="text-slate-300 mx-0.5">·</span>
+                  )}
+                  {entry.durationLabel && <span>{entry.durationLabel}</span>}
+                </div>
+              )}
+            </div>
+            <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${cfg.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot.replace(" animate-pulse","")}`} />
+              {cfg.label}
+            </span>
+          </div>
+
+          {/* Expand/collapse toggle */}
+          {hasDetail && (
+            <>
+              <button
+                onClick={() => setExpanded(e => !e)}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors mt-1"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                {expanded ? "收起" : entry.evaluation ? "查看評價詳情" : "查看原因"}
+              </button>
+
+              {expanded && (
+                <div className="mt-3 space-y-2.5">
+                  {entry.evaluation && (
+                    <div className="bg-amber-50/70 border border-amber-100 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
+                        <Award className="w-3.5 h-3.5" />工作評價
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed">{entry.evaluation.comment}</p>
+                    </div>
+                  )}
+                  {entry.rejectReason && (
+                    <div className="bg-red-50/70 border border-red-100 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1.5">
+                        <XCircle className="w-3.5 h-3.5" />拒絕原因
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed">{entry.rejectReason}</p>
+                    </div>
+                  )}
+                  {entry.revokeDetail && (
+                    <div className="bg-orange-50/70 border border-orange-100 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-orange-700 mb-1.5 flex items-center gap-1.5">
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        駁回原因
+                        {entry.revokeReason && (
+                          <span className="font-normal text-orange-600 ml-1">（{entry.revokeReason}）</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed">{entry.revokeDetail}</p>
+                    </div>
+                  )}
+                  {entry.terminationReason && (
+                    <div className="bg-red-50/70 border border-red-100 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />異常終止原因
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed">{entry.terminationReason}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Summary cards ──────────────────────────────────────────
-function SummaryCard({ label, value, sub, color }: {
-  label: string; value: number | string; sub?: string; color: string;
+// ── Candidate history panel (right drawer) ─────────────────
+function CandidateHistoryPanel({
+  candidate,
+  fromReview,
+  onClose,
+}: {
+  candidate: CandidateHistory;
+  fromReview: boolean;
+  onClose: () => void;
 }) {
+  const navigate = useNavigate();
+  const stats = getHistoryStats(candidate.entries);
+
+  const handleReturnToReview = () => {
+    navigate(`/talent?applicant=${candidate.applicantId}`);
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/25 backdrop-blur-[2px] z-40" onClick={onClose} />
+      <div className="fixed right-0 top-0 bottom-0 w-[520px] max-w-[95vw] bg-white shadow-2xl z-50 flex flex-col">
+
+        {/* Panel header */}
+        <div className="px-6 py-5 border-b border-slate-200 shrink-0">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${avatarColor(candidate.applicantId)}`}>
+                {candidate.name[0]}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-lg font-semibold text-slate-900">{candidate.name}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full border font-medium ${
+                    candidate.gender === "女" ? "bg-pink-50 text-pink-600 border-pink-200" : "bg-blue-50 text-blue-600 border-blue-200"
+                  }`}>{candidate.gender}</span>
+                  <span className="text-xs text-slate-400">{candidate.age} 歲</span>
+                </div>
+                <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
+                  <Phone className="w-3 h-3 text-slate-400" />{candidate.phone}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors ml-2 shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Stat badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+              <ClipboardList className="w-3.5 h-3.5 text-violet-500" />
+              申請 <span className="font-semibold text-slate-900 ml-0.5">{stats.appCount}</span> 次
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+              <Briefcase className="w-3.5 h-3.5 text-blue-500" />
+              在職 <span className="font-semibold text-slate-900 ml-0.5">{stats.empCount}</span> 次
+            </div>
+            {stats.rejectCount > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                <XCircle className="w-3.5 h-3.5" />
+                拒絕錄用 <span className="font-semibold ml-0.5">{stats.rejectCount}</span> 次
+              </div>
+            )}
+            {stats.revokeCount > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+                <XCircle className="w-3.5 h-3.5" />
+                駁回錄用 <span className="font-semibold ml-0.5">{stats.revokeCount}</span> 次
+              </div>
+            )}
+          </div>
+
+          {/* Return to review CTA */}
+          {fromReview && (
+            <button
+              onClick={handleReturnToReview}
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              返回審核此候選人
+            </button>
+          )}
+        </div>
+
+        {/* Timeline */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <span>互動時間線</span>
+            <span className="text-slate-300">·</span>
+            <span className="normal-case text-slate-400 font-normal">最新紀錄在前</span>
+          </div>
+          <div>
+            {candidate.entries.map((entry, idx) => (
+              <HistoryEntryCard
+                key={entry.id}
+                entry={entry}
+                isLast={idx === candidate.entries.length - 1}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Summary card ───────────────────────────────────────────
+function SummaryCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className={`rounded-xl p-4 border ${color}`}>
       <div className="text-2xl font-semibold">{value}</div>
       <div className="text-sm mt-0.5">{label}</div>
-      {sub && <div className="text-xs mt-0.5 opacity-70">{sub}</div>}
     </div>
+  );
+}
+
+// ── Latest entry status badge ──────────────────────────────
+function LatestStatusBadge({ entries }: { entries: HistoryEntry[] }) {
+  if (!entries.length) return null;
+  const latest = entries[0];
+  const cfg = STATUS_CFG[latest.status];
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${cfg.color}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot.replace(" animate-pulse","")}`} />
+      {cfg.label}
+    </span>
   );
 }
 
 // ── Main Page ──────────────────────────────────────────────
 export function WorkRecordsPage() {
-  const [records] = useState<WorkRecord[]>(MOCK_WORK_RECORDS);
-  const [activeTab, setActiveTab] = useState<StatusFilter>("all");
+  const [searchParams] = useSearchParams();
+  const candidateParam = searchParams.get("candidate");
+  const fromReview     = searchParams.get("from") === "review";
+
   const [search, setSearch] = useState("");
-  const [storeFilter, setStoreFilter] = useState("all");
-  const [hiringFilter, setHiringFilter] = useState("all");
-  const [detailRecord, setDetailRecord] = useState<WorkRecord | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<CandidateHistory | null>(null);
 
-  const allStores = Array.from(new Set(records.map(r => r.store))).sort();
+  useEffect(() => {
+    if (candidateParam) {
+      const found = CANDIDATE_HISTORY_MAP.get(candidateParam);
+      if (found) setSelectedCandidate(found);
+    }
+  }, [candidateParam]);
 
-  const filtered = records.filter(r => {
-    const matchTab   = activeTab === "all" || r.status === activeTab;
-    const matchStore = storeFilter === "all" || r.store === storeFilter;
-    const matchHire  = hiringFilter === "all" || r.hiringType === hiringFilter;
-    const matchSearch = !search || r.employeeName.includes(search) || r.phone.includes(search) || r.jobTitle.includes(search);
-    return matchTab && matchStore && matchHire && matchSearch;
-  });
+  const filtered = CANDIDATE_HISTORIES.filter(c =>
+    !search || c.name.includes(search) || c.phone.includes(search)
+  );
 
-  const countByStatus = (s: StatusFilter) =>
-    s === "all" ? records.length : records.filter(r => r.status === s).length;
-
-  const activeCount   = records.filter(r => r.status === "在職").length;
-  const completedCount = records.filter(r => r.status === "已完成").length;
-  const abnormalCount = records.filter(r => r.status === "異常終止").length;
+  const totalCount     = CANDIDATE_HISTORIES.length;
+  const goodCount      = CANDIDATE_HISTORIES.filter(c => getHistoryStats(c.entries).hasGoodRecord).length;
+  const warningCount   = CANDIDATE_HISTORIES.filter(c => getHistoryStats(c.entries).hasRejection).length;
+  const workingCount   = CANDIDATE_HISTORIES.filter(c => getHistoryStats(c.entries).currentlyWorking).length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -173,259 +328,149 @@ export function WorkRecordsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold text-slate-900">工作記錄</h1>
-              <p className="text-sm text-slate-500 mt-0.5">管理所有錄用員工的在職及歷史工作狀態</p>
+              <p className="text-sm text-slate-500 mt-0.5">查看候選人在本商戶的所有申請及在職歷史</p>
             </div>
             <NotificationDropdown />
           </div>
         </header>
 
         <main className="flex-1 p-8 overflow-auto">
-          <div className="max-w-full">
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <SummaryCard label="總工作記錄" value={records.length} color="bg-white border-slate-200 text-slate-900" />
-              <SummaryCard label="當前在職" value={activeCount} sub="實時更新" color="bg-green-50 border-green-200 text-green-800" />
-              <SummaryCard label="已完成" value={completedCount} color="bg-blue-50 border-blue-200 text-blue-800" />
-              <SummaryCard label="異常終止" value={abnormalCount} color="bg-red-50 border-red-200 text-red-800" />
-            </div>
+          {/* Summary */}
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <SummaryCard label="有記錄候選人" value={totalCount} color="bg-white border-slate-200 text-slate-900" />
+            <SummaryCard label="優質紀錄" value={goodCount} color="bg-green-50 border-green-200 text-green-800" />
+            <SummaryCard label="需留意" value={warningCount} color="bg-red-50 border-red-200 text-red-800" />
+            <SummaryCard label="當前在職" value={workingCount} color="bg-blue-50 border-blue-200 text-blue-800" />
+          </div>
 
-            {/* Filters */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-sm">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative flex-1 min-w-[180px] max-w-xs">
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="搜尋姓名、電話或職位…"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {search && (
-                    <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-                <FilterSelect value={storeFilter} onChange={setStoreFilter} label="全部門店">
-                  {allStores.map(s => <option key={s} value={s}>{s}</option>)}
-                </FilterSelect>
-                <FilterSelect value={hiringFilter} onChange={setHiringFilter} label="招聘方式">
-                  <option value="全職">全職</option>
-                  <option value="兼職">兼職</option>
-                  <option value="臨時工">臨時工</option>
-                </FilterSelect>
-                {(storeFilter !== "all" || hiringFilter !== "all") && (
-                  <button
-                    onClick={() => { setStoreFilter("all"); setHiringFilter("all"); }}
-                    className="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <X className="w-3 h-3" />清除篩選
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Status tabs */}
-            <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
-              {STATUS_TABS.map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-2.5 text-sm font-medium relative transition-colors ${
-                    activeTab === tab.key ? "text-blue-700" : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  {tab.label}
-                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.key ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
-                  }`}>
-                    {countByStatus(tab.key)}
-                  </span>
-                  {activeTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t" />}
+          {/* Search */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-sm">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="搜尋候選人姓名或電話…"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              ))}
+              )}
             </div>
+          </div>
 
-            {/* Table */}
+          {/* Candidate list */}
+          {filtered.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 py-20 flex flex-col items-center gap-3 text-slate-400">
+              <Users className="w-10 h-10 text-slate-300" />
+              <p className="text-sm">暫無符合條件的候選人記錄</p>
+            </div>
+          ) : (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full table-fixed min-w-[1000px] text-sm">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <th className="px-4 py-3 text-left w-[130px]">員工</th>
-                      <th className="px-4 py-3 text-center w-[50px]">性別</th>
-                      <th className="px-4 py-3 text-center w-[50px]">年齡</th>
+                      <th className="px-4 py-3 text-left w-[150px]">候選人</th>
                       <th className="px-4 py-3 text-left w-[130px]">聯絡電話</th>
-                      <th className="px-4 py-3 text-left w-[110px]">職位</th>
-                      <th className="px-4 py-3 text-left w-[80px]">方式</th>
-                      <th className="px-4 py-3 text-left w-[110px]">門店</th>
-                      <th className="px-4 py-3 text-left w-[100px]">開始日期</th>
-                      <th className="px-4 py-3 text-left w-[100px]">結束日期</th>
-                      <th className="px-4 py-3 text-left w-[90px]">狀態</th>
-                      <th className="px-4 py-3 text-left w-[80px]">操作</th>
+                      <th className="px-4 py-3 text-center w-[70px]">申請次數</th>
+                      <th className="px-4 py-3 text-center w-[70px]">在職次數</th>
+                      <th className="px-4 py-3 text-center w-[80px]">拒絕錄用</th>
+                      <th className="px-4 py-3 text-center w-[80px]">駁回錄用</th>
+                      <th className="px-4 py-3 text-left w-[120px]">最新狀態</th>
+                      <th className="px-4 py-3 text-left w-[100px]">最後互動</th>
+                      <th className="px-4 py-3 text-left w-[70px]">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={11} className="py-16 text-center">
-                          <div className="flex flex-col items-center gap-2 text-slate-400">
-                            <FileText className="w-8 h-8 text-slate-300" />
-                            <span className="text-sm">暫無符合條件的工作記錄</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : filtered.map(r => (
-                      <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors">
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
-                              r.gender === "女" ? "bg-rose-100 text-rose-700" : "bg-blue-100 text-blue-700"
-                            }`}>
-                              {r.employeeName[0]}
+                    {filtered.map(c => {
+                      const stats = getHistoryStats(c.entries);
+                      const latestDate = c.entries[0]?.date ?? "—";
+                      return (
+                        <tr
+                          key={c.applicantId}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors cursor-pointer"
+                          onClick={() => setSelectedCandidate(c)}
+                        >
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${avatarColor(c.applicantId)}`}>
+                                {c.name[0]}
+                              </div>
+                              <div>
+                                <div className="font-medium text-slate-900">{c.name}</div>
+                                <div className="text-xs text-slate-400 mt-0.5">
+                                  <span className={`inline-flex px-1 py-0 rounded text-[10px] font-medium mr-1 ${
+                                    c.gender === "女" ? "text-pink-500" : "text-blue-500"
+                                  }`}>{c.gender}</span>
+                                  {c.age} 歲
+                                </div>
+                              </div>
                             </div>
-                            <span className="font-medium text-slate-900">{r.employeeName}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <span className={`text-[11px] px-1.5 py-0.5 rounded-full border font-medium ${
-                            r.gender === "女" ? "bg-pink-50 text-pink-600 border-pink-200" : "bg-blue-50 text-blue-600 border-blue-200"
-                          }`}>{r.gender}</span>
-                        </td>
-                        <td className="px-4 py-3.5 text-center text-sm text-slate-700">{r.age}</td>
-                        <td className="px-4 py-3.5 text-slate-600 tabular-nums text-sm">{r.phone}</td>
-                        <td className="px-4 py-3.5">
-                          <div className="text-slate-900 font-medium text-sm">{r.jobTitle}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">{r.jobId}</div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${HIRING_COLORS[r.hiringType]}`}>
-                            {r.hiringType}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="text-sm text-slate-700">{r.store}</div>
-                          <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />{r.district}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-slate-500 tabular-nums">{r.startDate}</td>
-                        <td className="px-4 py-3.5 text-sm text-slate-500 tabular-nums">
-                          {r.endDate ?? <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${STATUS_COLORS[r.status]}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOTS[r.status]}`} />
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <button
-                            onClick={() => setDetailRecord(r)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-50 hover:border-slate-300 transition-colors"
-                          >
-                            <FileText className="w-3 h-3" />詳情
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600 tabular-nums text-sm">{c.phone}</td>
+                          <td className="px-4 py-3.5 text-center">
+                            <span className="text-sm font-semibold text-slate-900">{stats.appCount}</span>
+                            <span className="text-xs text-slate-400 ml-0.5">次</span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <span className="text-sm font-semibold text-slate-900">{stats.empCount}</span>
+                            <span className="text-xs text-slate-400 ml-0.5">次</span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            {stats.rejectCount >= 1 ? (
+                              <span className="text-sm font-semibold text-red-600">{stats.rejectCount}</span>
+                            ) : (
+                              <span className="text-sm text-slate-400">0</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            {stats.revokeCount >= 1 ? (
+                              <span className="text-sm font-semibold text-red-600">{stats.revokeCount}</span>
+                            ) : (
+                              <span className="text-sm text-slate-400">0</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <LatestStatusBadge entries={c.entries} />
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-slate-500 tabular-nums">{latestDate}</td>
+                          <td className="px-4 py-3.5">
+                            <button
+                              onClick={e => { e.stopPropagation(); setSelectedCandidate(c); }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
+                            >
+                              <FileText className="w-3 h-3" />查看
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
+          )}
 
-            {filtered.length > 0 && (
-              <div className="mt-3 text-xs text-slate-400 text-right">共 {filtered.length} 條記錄</div>
-            )}
-
-          </div>
+          {filtered.length > 0 && (
+            <div className="mt-3 text-xs text-slate-400 text-right">
+              共 {filtered.length} 位候選人有互動記錄
+            </div>
+          )}
         </main>
       </div>
 
-      {/* Detail panel */}
-      {detailRecord && (
-        <>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setDetailRecord(null)} />
-          <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 flex flex-col">
-            <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between shrink-0">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs text-slate-400 font-mono">{detailRecord.id}</span>
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium ${STATUS_COLORS[detailRecord.status]}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOTS[detailRecord.status]}`} />
-                    {detailRecord.status}
-                  </span>
-                </div>
-                <h2 className="text-lg font-semibold text-slate-900">{detailRecord.employeeName}</h2>
-              </div>
-              <button onClick={() => setDetailRecord(null)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-              {/* Employee info */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">員工資料</div>
-                <div className="space-y-2.5">
-                  <DetailRow label="姓名">{detailRecord.employeeName}</DetailRow>
-                  <DetailRow label="性別">
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${
-                      detailRecord.gender === "女" ? "bg-pink-50 text-pink-600 border-pink-200" : "bg-blue-50 text-blue-600 border-blue-200"
-                    }`}>{detailRecord.gender}</span>
-                  </DetailRow>
-                  <DetailRow label="年齡">{detailRecord.age} 歲</DetailRow>
-                  <DetailRow label="聯絡電話">
-                    <span className="flex items-center gap-1 text-sm"><Phone className="w-3 h-3 text-slate-400" />{detailRecord.phone}</span>
-                  </DetailRow>
-                </div>
-              </div>
-              {/* Job info */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">工作資訊</div>
-                <div className="space-y-2.5">
-                  <DetailRow label="職位名稱">{detailRecord.jobTitle}</DetailRow>
-                  <DetailRow label="招聘方式">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${HIRING_COLORS[detailRecord.hiringType]}`}>
-                      {detailRecord.hiringType}
-                    </span>
-                  </DetailRow>
-                  <DetailRow label="門店">
-                    <span className="flex items-center gap-1 text-sm"><MapPin className="w-3 h-3 text-slate-400" />{detailRecord.store} · {detailRecord.district}</span>
-                  </DetailRow>
-                  <DetailRow label="薪酬">{detailRecord.wage}</DetailRow>
-                </div>
-              </div>
-              {/* Timeline */}
-              <div>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">工作時段</div>
-                <div className="space-y-2.5">
-                  <DetailRow label="開始日期">
-                    <span className="flex items-center gap-1 text-sm"><Calendar className="w-3 h-3 text-slate-400" />{detailRecord.startDate}</span>
-                  </DetailRow>
-                  <DetailRow label="結束日期">
-                    {detailRecord.endDate
-                      ? <span className="flex items-center gap-1 text-sm"><Calendar className="w-3 h-3 text-slate-400" />{detailRecord.endDate}</span>
-                      : <span className="text-sm text-slate-400">進行中</span>}
-                  </DetailRow>
-                  {detailRecord.totalDays != null && (
-                    <DetailRow label="工作天數">{detailRecord.totalDays} 天</DetailRow>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
+      {/* Candidate history panel */}
+      {selectedCandidate && (
+        <CandidateHistoryPanel
+          candidate={selectedCandidate}
+          fromReview={fromReview}
+          onClose={() => setSelectedCandidate(null)}
+        />
       )}
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-4">
-      <span className="text-xs text-slate-500 w-18 shrink-0 pt-0.5">{label}</span>
-      <div className="flex-1 min-w-0 text-sm text-slate-700">{children}</div>
     </div>
   );
 }

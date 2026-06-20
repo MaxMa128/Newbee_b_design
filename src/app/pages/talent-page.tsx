@@ -4,9 +4,10 @@ import {
   Users, Search, Phone, Calendar, ClipboardCheck, CheckCircle2,
   XCircle, X, Filter, FileText, GraduationCap, Briefcase as BriefcaseIcon,
   Award, Globe, Star, ChevronRight, ChevronDown,
-  Hourglass, UserCheck, Settings, RotateCcw,
+  Hourglass, UserCheck, Settings, RotateCcw, History,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
+import { CANDIDATE_HISTORY_MAP, getHistoryStats } from "../data/candidateHistory";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -679,15 +680,21 @@ function ReviewModal({
   onApprove,
   onReject,
   onViewResume,
+  onViewWorkHistory,
 }: {
   applicant: Applicant;
   onClose: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string, reason: string) => void;
   onViewResume: () => void;
+  onViewWorkHistory: () => void;
 }) {
   const [rejectReason, setRejectReason] = useState("");
   const [step, setStep] = useState<"main" | "reject-confirm">("main");
+
+  const history = CANDIDATE_HISTORY_MAP.get(applicant.id);
+  const stats   = history ? getHistoryStats(history.entries) : null;
+  const hasHistory = !!history;
 
   const handleReject = () => {
     onReject(applicant.id, rejectReason);
@@ -730,6 +737,44 @@ function ReviewModal({
               {applicant.appStatus}
             </span>
           </div>
+
+          {/* Work history summary */}
+          {!hasHistory ? (
+            <div className="flex items-center gap-2.5 px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+                <History className="w-3.5 h-3.5 text-slate-500" />
+              </div>
+              <div className="flex-1">
+                <div className="text-xs font-medium text-slate-700">本商戶工作記錄</div>
+                <div className="text-xs text-slate-400 mt-0.5">首次申請，暫無過往互動記錄</div>
+              </div>
+              <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 font-medium shrink-0">
+                首次申請
+              </span>
+            </div>
+          ) : (
+            <button
+              onClick={onViewWorkHistory}
+              className="w-full flex items-center gap-3 px-3.5 py-3 border border-slate-200 bg-slate-50/80 rounded-xl hover:bg-slate-100 transition-colors group text-left"
+            >
+              <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <History className="w-3.5 h-3.5 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-800">本商戶工作記錄</div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {stats!.appCount} 次申請記錄
+                  {stats!.empCount > 0 && ` · ${stats!.empCount} 次在職記錄`}
+                  {stats!.rejectCount > 0 && ` · 拒絕錄用 ${stats!.rejectCount} 次`}
+                  {stats!.revokeCount > 0 && ` · 駁回錄用 ${stats!.revokeCount} 次`}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-blue-600 font-medium shrink-0">
+                查看詳情
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+          )}
 
           {/* View resume shortcut */}
           <button
@@ -1202,15 +1247,40 @@ export function TalentPage() {
                                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                               )}
                             </div>
-                            <span className={`font-medium ${isUnread ? "text-slate-900" : "text-slate-700"}`}>{a.name}</span>
-                            {isUnread && (
-                              <span className="text-[10px] bg-red-100 text-red-600 font-semibold px-1.5 py-0.5 rounded-full leading-none">新</span>
-                            )}
-                            {a.appType === "pool" && (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-violet-100 text-violet-600 font-semibold px-1.5 py-0.5 rounded-full leading-none border border-violet-200">
-                                <Hourglass className="w-2.5 h-2.5" />候選池
-                              </span>
-                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`font-medium ${isUnread ? "text-slate-900" : "text-slate-700"}`}>{a.name}</span>
+                                {isUnread && (
+                                  <span className="text-[10px] bg-red-100 text-red-600 font-semibold px-1.5 py-0.5 rounded-full leading-none">新</span>
+                                )}
+                                {a.appType === "pool" && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] bg-violet-100 text-violet-600 font-semibold px-1.5 py-0.5 rounded-full leading-none border border-violet-200">
+                                    <Hourglass className="w-2.5 h-2.5" />候選池
+                                  </span>
+                                )}
+                              </div>
+                              {/* Work history indicator */}
+                              {(() => {
+                                const hist = CANDIDATE_HISTORY_MAP.get(a.id);
+                                if (!hist) {
+                                  return (
+                                    <span className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-0.5">
+                                      <History className="w-2.5 h-2.5" />首次申請
+                                    </span>
+                                  );
+                                }
+                                const s = getHistoryStats(hist.entries);
+                                return (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); navigate(`/work-records?candidate=${a.id}&from=review`); }}
+                                    className="text-[10px] text-blue-600 hover:text-blue-700 mt-0.5 flex items-center gap-0.5 transition-colors"
+                                  >
+                                    <History className="w-2.5 h-2.5" />
+                                    {s.appCount}次記錄{s.hasRiskFlag ? " ⚠" : ""}
+                                  </button>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-slate-600 tabular-nums">{a.phone}</td>
@@ -1317,6 +1387,9 @@ export function TalentPage() {
           onViewResume={() => {
             setResumeTarget(reviewTarget);
             setReviewTarget(null);
+          }}
+          onViewWorkHistory={() => {
+            navigate(`/work-records?candidate=${reviewTarget.id}&from=review`);
           }}
         />
       )}
