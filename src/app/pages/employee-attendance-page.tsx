@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Clock, MapPin,
-  Image, ClipboardCheck, CheckCircle2, XCircle, AlertTriangle, X,
+  Image as ImageIcon, ClipboardCheck, CheckCircle2, XCircle, AlertTriangle, X,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -158,7 +158,7 @@ function ClockBlock({ label, event, scheduled }: { label: string; event?: ClockE
       <div className="relative h-24 rounded-lg overflow-hidden bg-slate-100 mb-2 cursor-pointer group" onClick={() => setLightbox(true)}>
         <img src={event.photo} alt="打卡照片" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-          <Image className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ImageIcon className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </div>
       <div className="space-y-1">
@@ -256,7 +256,8 @@ function OverrideDialog({ date, currentStatus, onClose, onSave }: {
 export function EmployeeAttendancePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const empId = searchParams.get("id") ?? "";
+  const empId    = searchParams.get("id") ?? "";
+  const returnTo = searchParams.get("returnTo") ?? "";
 
   const employee = HIRED_EMPLOYEES.find(e => e.id === empId);
   const [viewYear, setViewYear] = useState(CUR_YEAR);
@@ -324,9 +325,18 @@ export function EmployeeAttendancePage() {
         <header className="bg-white border-b border-slate-200 px-8 py-4 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={() => navigate("/attendance")} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors">
-                <ArrowLeft className="w-4 h-4" /><span className="text-sm">返回考勤管理</span>
+              <button
+                onClick={() => navigate(returnTo === "finance" ? "/finance" : "/attendance")}
+                className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm">{returnTo === "finance" ? "返回財務管理" : "返回考勤管理"}</span>
               </button>
+              {returnTo === "finance" && (
+                <div className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full">
+                  確認工時及出糧
+                </div>
+              )}
               <div className="w-px h-5 bg-slate-200" />
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${avatarColor(employee.id)}`}>{employee.name[0]}</div>

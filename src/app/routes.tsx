@@ -6,8 +6,11 @@ import { JobsPage } from "./pages/jobs-page";
 import { TalentPage } from "./pages/talent-page";
 import { WorkRecordsPage } from "./pages/work-records-page";
 import { SchedulePage } from "./pages/schedule-page";
+import { JobTypesPage } from "./pages/job-types-page";
+import { EmployeesPage } from "./pages/employees-page";
 import { AttendancePage } from "./pages/attendance-page";
 import { EmployeeAttendancePage } from "./pages/employee-attendance-page";
+import { FinancePage } from "./pages/finance-page";
 import { StoresPage } from "./pages/stores-page";
 import { MerchantProfilePage } from "./pages/merchant-profile-page";
 import { NotificationsPage } from "./pages/notifications-page";
@@ -42,6 +45,14 @@ export const router = createMemoryRouter([
     Component: WorkRecordsPage,
   },
   {
+    path: "/job-types",
+    Component: JobTypesPage,
+  },
+  {
+    path: "/employees",
+    Component: EmployeesPage,
+  },
+  {
     path: "/schedule",
     Component: SchedulePage,
   },
@@ -52,6 +63,14 @@ export const router = createMemoryRouter([
   {
     path: "/attendance-employee",
     Component: EmployeeAttendancePage,
+  },
+  {
+    path: "/finance",
+    Component: FinancePage,
+  },
+  {
+    path: "/finance-platform",
+    Component: FinancePage,
   },
   {
     path: "/stores",

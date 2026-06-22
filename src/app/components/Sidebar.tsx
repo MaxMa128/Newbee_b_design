@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Briefcase, Users, Store, Building2,
   MessageSquare, ChevronDown, ClipboardList, Briefcase as WorkIcon,
   Megaphone, FileText, CalendarDays, ClipboardCheck, CalendarClock,
+  Wallet, Users as UsersIcon, ArrowRightLeft, Layers, UserRoundCheck,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useNotifications } from "../contexts/notification-context";
@@ -13,9 +14,10 @@ interface SidebarProps {
   onContactSupport?: () => void;
 }
 
-const RECRUITMENT_PATHS = ["/jobs", "/stores", "/create-job"];
-const TALENT_PATHS      = ["/talent", "/work-records"];
+const RECRUITMENT_PATHS = ["/jobs", "/stores", "/create-job", "/job-types"];
+const TALENT_PATHS      = ["/talent", "/work-records", "/employees"];
 const SCHEDULE_PATHS    = ["/schedule", "/attendance"];
+const FINANCE_PATHS     = ["/finance", "/finance-platform"];
 
 export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
   const navigate = useNavigate();
@@ -32,6 +34,9 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
   );
   const [scheduleOpen, setScheduleOpen] = useState(
     SCHEDULE_PATHS.includes(path)
+  );
+  const [financeOpen, setFinanceOpen] = useState(
+    FINANCE_PATHS.includes(path)
   );
 
   const isActive = (p: string) => path === p || path.startsWith(p + "/");
@@ -98,6 +103,7 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
   const isRecruitmentActive = RECRUITMENT_PATHS.some(p => path === p || path.startsWith(p + "/"));
   const isTalentActive      = TALENT_PATHS.some(p => path === p);
   const isScheduleActive    = SCHEDULE_PATHS.some(p => path === p);
+  const isFinanceActive     = FINANCE_PATHS.some(p => path === p);
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
@@ -144,6 +150,12 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                   label="門店管理"
                   indent
                 />
+                <NavItem
+                  navPath="/job-types"
+                  icon={<Layers className="w-4 h-4" />}
+                  label="工種管理"
+                  indent
+                />
               </div>
             )}
           </div>
@@ -164,6 +176,12 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                   icon={<ClipboardList className="w-4 h-4" />}
                   label="求職記錄"
                   badge={unreadTalentCount}
+                  indent
+                />
+                <NavItem
+                  navPath="/employees"
+                  icon={<UserRoundCheck className="w-4 h-4" />}
+                  label="雇員管理"
                   indent
                 />
                 <NavItem
@@ -199,6 +217,23 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                   label="考勤管理"
                   indent
                 />
+              </div>
+            )}
+          </div>
+
+          {/* 財務管理 group */}
+          <div>
+            <GroupHeader
+              icon={<Wallet className="w-4.5 h-4.5" />}
+              label="財務管理"
+              open={financeOpen}
+              onToggle={() => setFinanceOpen(o => !o)}
+              hasActive={isFinanceActive}
+            />
+            {financeOpen && (
+              <div className="mt-0.5 space-y-0.5">
+                <NavItem navPath="/finance"          icon={<UsersIcon className="w-4 h-4" />}       label="人員結算" indent />
+                <NavItem navPath="/finance-platform" icon={<ArrowRightLeft className="w-4 h-4" />}  label="平台結算" indent />
               </div>
             )}
           </div>

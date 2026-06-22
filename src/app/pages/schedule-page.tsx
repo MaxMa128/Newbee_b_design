@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, Pencil, X,
   Download, AlertTriangle, ChevronDown, CalendarDays, Search,
+  LayoutGrid, List,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -112,15 +113,12 @@ function getWeekdayKey(dateStr: string): string {
   return WEEKDAY_KEYS[day === 0 ? 6 : day - 1];
 }
 
-function buildDefaultSchedule(employees: HiredEmployee[], dates: string[]): ScheduleMap {
+function buildEmptySchedule(employees: HiredEmployee[], dates: string[]): ScheduleMap {
   const result: ScheduleMap = {};
   for (const emp of employees) {
     result[emp.id] = {};
     for (const date of dates) {
-      const key = getWeekdayKey(date);
-      result[emp.id][date] = emp.defaultDays.includes(key)
-        ? { startTime: emp.defaultStart, endTime: emp.defaultEnd, isDayOff: false, isDefault: true }
-        : null;
+      result[emp.id][date] = null; // all cells empty — schedule only from onboarding or manual entry
     }
   }
   return result;
@@ -166,17 +164,12 @@ function ShiftCell({ shift, isToday, onClick }: {
     <div
       onClick={onClick}
       className={`h-16 flex flex-col items-center justify-center rounded-lg border cursor-pointer transition-all group relative ${
-        shift.isDefault
-          ? isToday ? "bg-blue-100 border-blue-300" : "bg-blue-50 border-blue-200 hover:bg-blue-100"
-          : isToday ? "bg-green-50 border-green-300" : "bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50"
+        isToday ? "bg-green-50 border-green-300" : "bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50"
       }`}
     >
       <span className="text-xs font-semibold text-slate-800 tabular-nums">{shift.startTime}</span>
       <span className="text-[9px] text-slate-400 leading-none my-0.5">—</span>
       <span className="text-xs font-semibold text-slate-800 tabular-nums">{shift.endTime}</span>
-      {shift.isDefault && (
-        <span className="absolute top-1 right-1.5 text-[8px] text-blue-400 font-bold leading-none">默</span>
-      )}
       <Pencil className="absolute bottom-1 right-1.5 w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
     </div>
   );
@@ -203,7 +196,7 @@ function EditShiftDialog({ target, onClose, onSave }: {
 
   const handleSave = () => {
     if (isDayOff) {
-      onSave({ startTime: "", endTime: "", isDayOff: true, isDefault: false });
+      onSave({ startTime: "", endTime: "", isDayOff: true, isDefault: false }); // isDefault kept for type compat
     } else {
       onSave({ startTime: start, endTime: end, isDayOff: false, isDefault: false });
     }
@@ -315,16 +308,31 @@ function EditShiftDialog({ target, onClose, onSave }: {
 // ── Summary card ───────────────────────────────────────────
 function SCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
   return (
-    <div className={`rounded-xl p-4 border ${color}`}>
-      <div className="text-2xl font-semibold">{value}</div>
-      <div className="text-sm font-medium mt-0.5">{label}</div>
-      <div className="text-xs opacity-70 mt-0.5">{sub}</div>
-    </div>
+    null
   );
 }
 
 // ── Main Page ──────────────────────────────────────────────
+function getMonthlyStats(emp: HiredEmployee, year: number, month: number) {
+  const days = new Date(year, month, 0).getDate();
+  let scheduledDays = 0, hours = 0;
+  for (let d = 1; d <= days; d++) {
+    const ds = `${year}-${String(month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const dow = new Date(ds).getDay();
+    const wk = WEEKDAY_KEYS[dow === 0 ? 6 : dow - 1];
+    if (emp.defaultDays.includes(wk)) {
+      scheduledDays++;
+      const [sh, sm] = emp.defaultStart.split(":").map(Number);
+      const [eh, em] = emp.defaultEnd.split(":").map(Number);
+      hours += (eh * 60 + em - sh * 60 - sm) / 60;
+    }
+  }
+  return { scheduledDays, hours: Math.round(hours * 10) / 10 };
+}
+
 export function SchedulePage() {
+  const [displayType, setDisplayType] = useState<"calendar" | "list">("calendar");
+  const [listMonth, setListMonth]     = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() + 1 }; });
   const [weekOffset, setWeekOffset]   = useState(0);
   const [viewMode, setViewMode]       = useState<"employee" | "position">("employee");
   const [posFilter, setPosFilter]     = useState("all");
@@ -349,10 +357,10 @@ export function SchedulePage() {
   const weekDates = getWeekDates(weekOffset);
   const weekKey   = weekDates[0];
 
-  const schedule: ScheduleMap = allSchedules[weekKey] ?? buildDefaultSchedule(HIRED_EMPLOYEES, weekDates);
+  const schedule: ScheduleMap = allSchedules[weekKey] ?? buildEmptySchedule(HIRED_EMPLOYEES, weekDates);
 
   if (!allSchedules[weekKey]) {
-    setAllSchedules(prev => ({ ...prev, [weekKey]: buildDefaultSchedule(HIRED_EMPLOYEES, weekDates) }));
+    setAllSchedules(prev => ({ ...prev, [weekKey]: buildEmptySchedule(HIRED_EMPLOYEES, weekDates) }));
   }
 
   const positions = Array.from(new Set(HIRED_EMPLOYEES.map(e => e.jobTitle)));
@@ -410,6 +418,16 @@ export function SchedulePage() {
               <p className="text-sm text-slate-500 mt-0.5">管理已錄用員工的每週班次安排</p>
             </div>
             <div className="flex items-center gap-3">
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                <button onClick={() => setDisplayType("calendar")} title="日曆視圖"
+                  className={`p-1.5 rounded-md transition-colors ${displayType === "calendar" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button onClick={() => setDisplayType("list")} title="列表視圖"
+                  className={`p-1.5 rounded-md transition-colors ${displayType === "list" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
                 <Download className="w-4 h-4" />匯出排班表
               </Button>
@@ -419,6 +437,70 @@ export function SchedulePage() {
         </header>
 
         <main className="flex-1 p-8 overflow-auto">
+
+          {/* ── List view ── */}
+          {displayType === "list" && (
+            <>
+              <div className="flex items-center gap-3 mb-5">
+                <button onClick={() => setListMonth(m => m.month === 1 ? {year:m.year-1,month:12} : {...m,month:m.month-1})} className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"><ChevronLeft className="w-4 h-4 text-slate-600" /></button>
+                <span className="text-sm font-semibold text-slate-900 min-w-[100px] text-center">{listMonth.year}年{listMonth.month}月</span>
+                <button onClick={() => setListMonth(m => m.month === 12 ? {year:m.year+1,month:1} : {...m,month:m.month+1})} className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"><ChevronRight className="w-4 h-4 text-slate-600" /></button>
+                <span className="text-xs text-slate-400">共 {displayedEmployees.length} 人</span>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <th className="px-4 py-3 text-left w-[160px]">員工</th>
+                      <th className="px-4 py-3 text-left w-[120px]">工種 / 門店</th>
+                      <th className="px-4 py-3 text-left w-[80px]">類型</th>
+                      <th className="px-4 py-3 text-center w-[90px]">應排班天數</th>
+                      <th className="px-4 py-3 text-center w-[90px]">應排班工時</th>
+                      <th className="px-4 py-3 text-left w-[160px]">工作日</th>
+                      <th className="px-4 py-3 text-left w-[120px]">每日時段</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedEmployees.map((emp, idx) => {
+                      const stats = getMonthlyStats(emp, listMonth.year, listMonth.month);
+                      return (
+                        <tr key={emp.id} className={`border-b border-slate-50 last:border-0 ${idx % 2 === 0 ? "" : "bg-slate-50/30"}`}>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
+                              <span className="font-medium text-slate-900">{emp.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="text-sm text-slate-700">{emp.jobTitle}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{emp.store}</div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full border text-[11px] font-medium ${emp.hiringType === "全職" ? "bg-blue-50 text-blue-700 border-blue-200" : emp.hiringType === "兼職" ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-violet-50 text-violet-700 border-violet-200"}`}>{emp.hiringType}</span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center"><span className="text-sm font-semibold text-slate-900">{stats.scheduledDays}</span><span className="text-xs text-slate-400 ml-0.5">天</span></td>
+                          <td className="px-4 py-3.5 text-center"><span className="text-sm font-semibold text-slate-900">{stats.hours}</span><span className="text-xs text-slate-400 ml-0.5">h</span></td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex flex-wrap gap-1">
+                              {emp.defaultDays.map(d => (
+                                <span key={d} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-medium">
+                                  {WEEKDAY_LABELS[WEEKDAY_KEYS.indexOf(d)]}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-slate-700 tabular-nums">{emp.defaultStart} – {emp.defaultEnd}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 text-xs text-slate-400 text-right">{listMonth.year}年{listMonth.month}月 · 共 {displayedEmployees.length} 人</div>
+            </>
+          )}
+
+          {displayType === "calendar" && (<>
 
           {/* Week nav + view toggle */}
           <div className="flex items-center justify-between mb-6">
@@ -611,11 +693,12 @@ export function SchedulePage() {
 
           {/* Legend */}
           <div className="mt-3 flex items-center gap-5 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-100 border border-blue-200 shrink-0" />已排班（默認）</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-slate-200 shrink-0" />已排班（手動）</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-slate-200 shrink-0" />已排班</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 shrink-0" />休假</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-dashed border-slate-300 shrink-0" />未排班</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-dashed border-slate-300 shrink-0" />未排班（點擊新增）</span>
           </div>
+
+          </>)} {/* end calendar view */}
 
         </main>
       </div>

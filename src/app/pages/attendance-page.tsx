@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import {
   CheckCircle2, XCircle, Clock,
   Search, X, ChevronDown, Calendar, FileText,
-  ClipboardCheck,
+  ClipboardCheck, Image as ImageIcon, LayoutList, BarChart2,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -231,19 +231,33 @@ const AVATAR_COLORS = ["bg-blue-100 text-blue-700","bg-violet-100 text-violet-70
 function avatarColor(id: string) { return AVATAR_COLORS[parseInt(id.replace("APP-",""),10) % AVATAR_COLORS.length]; }
 
 // ── Compute summary stats ──────────────────────────────────
+function toM(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
+
 function computeStats(records: DayRecord[], corrections: CorrectionRequest[]) {
   const corrMap = new Map(corrections.map(c => [c.id, c.status]));
-  const effectiveStatus = (r: DayRecord): DayStatus => {
+  const eff = (r: DayRecord): DayStatus => {
     if (r.correctionId && corrMap.get(r.correctionId) === "已批准") return "已補卡";
     return r.status;
   };
-  const past = records.filter(r => r.status !== "未排班" && r.status !== "待上班");
-  const total = records.filter(r => r.scheduledStart).length;
-  const normal = past.filter(r => ["正常","已補卡"].includes(effectiveStatus(r))).length;
-  const abnormal = past.filter(r => ["遲到早退","缺勤"].includes(effectiveStatus(r))).length;
-  const pending = past.filter(r => effectiveStatus(r) === "補卡待審核").length;
-  const rate = past.length > 0 ? Math.round(normal / past.length * 100) : 100;
-  return { total, pastDays: past.length, normal, abnormal, pending, rate };
+  const past    = records.filter(r => r.status !== "未排班" && r.status !== "待上班");
+  const total   = records.filter(r => r.scheduledStart).length;
+  const normal  = past.filter(r => ["正常","已補卡"].includes(eff(r))).length;
+  const abnormal = past.filter(r => ["遲到早退","缺勤"].includes(eff(r))).length;
+  const pending  = past.filter(r => eff(r) === "補卡待審核").length;
+  const rate     = past.length > 0 ? Math.round(normal / past.length * 100) : 100;
+  const scheduledHours = past.reduce((s, r) => {
+    if (!r.scheduledStart || !r.scheduledEnd) return s;
+    return s + (toM(r.scheduledEnd) - toM(r.scheduledStart)) / 60;
+  }, 0);
+  const actualHours = past.reduce((s, r) => {
+    if (!r.clockIn?.time || !r.clockOut?.time) return s;
+    return s + Math.max(0, (toM(r.clockOut.time) - toM(r.clockIn.time)) / 60);
+  }, 0);
+  return {
+    total, pastDays: past.length, normal, abnormal, pending, rate,
+    scheduledHours: Math.round(scheduledHours * 10) / 10,
+    actualHours:    Math.round(actualHours    * 10) / 10,
+  };
 }
 
 // ── Day cell in calendar ───────────────────────────────────
@@ -302,7 +316,7 @@ function ClockBlock({ label, event, scheduled, lightboxTitle }: {
       <div className="relative h-20 rounded-lg overflow-hidden bg-slate-100 mb-2 cursor-pointer group" onClick={() => setLightbox(true)}>
         <img src={event.photo} alt="打卡照片" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-          <Image className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ImageIcon className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </div>
       <div className="space-y-1">
@@ -591,7 +605,7 @@ function CorrectionReviewPanel({ request, onClose, onApprove, onReject }: {
             <div className="relative h-32 rounded-xl overflow-hidden cursor-pointer group" onClick={() => setLightbox(true)}>
               <img src={request.photo} alt="補卡照片" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                <Image className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ImageIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             </div>
           </div>
@@ -643,6 +657,7 @@ export function AttendancePage() {
   const [activeTab, setActiveTab] = useState<"overview" | "corrections">("overview");
   const [corrections, setCorrections] = useState<CorrectionRequest[]>(INITIAL_CORRECTIONS);
   const [search, setSearch] = useState("");
+  const [overviewDisplay, setOverviewDisplay] = useState<"summary" | "detail">("summary");
   const [corrFilter, setCorrFilter] = useState("all");
   const [reviewTarget, setReviewTarget] = useState<CorrectionRequest | null>(null);
 
@@ -685,32 +700,44 @@ export function AttendancePage() {
         <main className="flex-1 p-8 overflow-auto">
 
           {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-6">
             {[
-              { label: "本月在職人數", value: HIRED_EMPLOYEES.length, color: "bg-white border-slate-200 text-slate-900" },
-              { label: "整體出勤率",   value: `${overallRate}%`,      color: overallRate >= 90 ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-200 text-amber-800" },
-              { label: "待審核補卡",   value: `${pendingCount}件`,    color: pendingCount > 0 ? "bg-violet-50 border-violet-200 text-violet-800" : "bg-white border-slate-200 text-slate-900" },
+              { label: "本月在職人數",    value: HIRED_EMPLOYEES.length,                                                          sub: "目前在職",     color: "bg-white border-slate-200 text-slate-900" },
+              { label: "整體出勤率",      value: `${overallRate}%`,                                                               sub: "本月至今",     color: overallRate >= 90 ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-200 text-amber-800" },
+              { label: "有考勤異常",      value: `${allStats.filter(x => x.stats.abnormal > 0).length} 人`,                       sub: "遲到早退或缺勤", color: "bg-amber-50 border-amber-200 text-amber-800" },
+              { label: "補卡待審核",      value: `${pendingCount} 件`,                                                            sub: "需要審核",     color: pendingCount > 0 ? "bg-violet-50 border-violet-200 text-violet-800" : "bg-white border-slate-200 text-slate-900" },
             ].map(c => (
-              <div key={c.label} className={`rounded-xl p-4 border ${c.color}`}>
-                <div className="text-2xl font-semibold">{c.value}</div>
-                <div className="text-sm mt-0.5">{c.label}</div>
-              </div>
+              null
             ))}
           </div>
 
-          {/* Tabs */}
-          <div className="flex items-center gap-1 mb-5 border-b border-slate-200">
-            {([
-              { key: "overview",     label: "考勤總覽",  count: hasAction },
-              { key: "corrections",  label: "補卡審核",  count: pendingCount },
-            ] as const).map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2.5 text-sm font-medium relative transition-colors ${activeTab === tab.key ? "text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
-                {tab.label}
-                {tab.count > 0 && <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-600"}`}>{tab.count}</span>}
-                {activeTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t" />}
-              </button>
-            ))}
+          {/* Tabs + display toggle */}
+          <div className="flex items-center justify-between mb-5 border-b border-slate-200">
+            <div className="flex items-center gap-1">
+              {([
+                { key: "overview",    label: "考勤總覽",  count: hasAction },
+                { key: "corrections", label: "補卡審核",  count: pendingCount },
+              ] as const).map(tab => (
+                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 py-2.5 text-sm font-medium relative transition-colors ${activeTab === tab.key ? "text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
+                  {tab.label}
+                  {tab.count > 0 && <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-600"}`}>{tab.count}</span>}
+                  {activeTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t" />}
+                </button>
+              ))}
+            </div>
+            {activeTab === "overview" && (
+              <div className="flex bg-slate-100 rounded-lg p-0.5 mb-1">
+                <button onClick={() => setOverviewDisplay("summary")} title="月度彙總"
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${overviewDisplay === "summary" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                  <BarChart2 className="w-3.5 h-3.5" />月度彙總
+                </button>
+                <button onClick={() => setOverviewDisplay("detail")} title="每日明細"
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${overviewDisplay === "detail" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                  <LayoutList className="w-3.5 h-3.5" />每日明細
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ── Overview tab ── */}
@@ -725,82 +752,104 @@ export function AttendancePage() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <th className="px-4 py-3 text-left w-[160px]">員工</th>
-                      <th className="px-4 py-3 text-left w-[120px]">職位 / 門店</th>
-                      <th className="px-4 py-3 text-center w-[80px]">應出勤</th>
-                      <th className="px-4 py-3 text-center w-[80px]">正常</th>
-                      <th className="px-4 py-3 text-center w-[80px]">異常</th>
-                      <th className="px-4 py-3 text-center w-[80px]">補卡待審核</th>
-                      <th className="px-4 py-3 text-left w-[200px]">出勤率</th>
-                      <th className="px-4 py-3 text-left w-[90px]">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEmployees.length === 0 ? (
-                      <tr><td colSpan={8} className="py-14 text-center text-sm text-slate-400">暫無符合的員工</td></tr>
-                    ) : filteredEmployees.map(emp => {
-                      const { stats } = allStats.find(x => x.emp.id === emp.id)!;
-                      const needsAttention = stats.abnormal > 0 || stats.pending > 0;
-                      return (
-                        <tr key={emp.id} className={`border-b border-slate-50 last:border-0 hover:bg-slate-50/70 transition-colors ${needsAttention ? "" : ""}`}>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
-                              <div>
-                                <div className="font-medium text-slate-900 flex items-center gap-1.5">
-                                  {emp.name}
-                                  {needsAttention && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
+              {/* Monthly summary view */}
+              {overviewDisplay === "summary" && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <th className="px-4 py-3 text-left w-[160px]">員工</th>
+                        <th className="px-4 py-3 text-left w-[120px]">職位 / 門店</th>
+                        <th className="px-4 py-3 text-center w-[80px]">應出勤</th>
+                        <th className="px-4 py-3 text-center w-[80px]">正常天數</th>
+                        <th className="px-4 py-3 text-center w-[80px]">異常天數</th>
+                        <th className="px-4 py-3 text-center w-[90px]">應出勤工時</th>
+                        <th className="px-4 py-3 text-center w-[90px]">實際工時</th>
+                        <th className="px-4 py-3 text-center w-[80px]">補卡</th>
+                        <th className="px-4 py-3 text-left w-[130px]">出勤率</th>
+                        <th className="px-4 py-3 text-left w-[90px]">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEmployees.length === 0 ? (
+                        <tr><td colSpan={10} className="py-14 text-center text-sm text-slate-400">暫無符合的員工</td></tr>
+                      ) : filteredEmployees.map(emp => {
+                        const { stats } = allStats.find(x => x.emp.id === emp.id)!;
+                        const needsAttention = stats.abnormal > 0 || stats.pending > 0;
+                        return (
+                          <tr key={emp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/70 transition-colors">
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
+                                <div>
+                                  <div className="font-medium text-slate-900 flex items-center gap-1.5">
+                                    {emp.name}
+                                    {needsAttention && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
+                                  </div>
+                                  <div className="text-xs text-slate-400 mt-0.5">{emp.gender}</div>
                                 </div>
-                                <div className="text-xs text-slate-400 mt-0.5">{emp.gender}</div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <div className="text-sm text-slate-700">{emp.jobTitle}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{emp.store}</div>
-                          </td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span className="text-sm font-medium text-slate-900">{stats.pastDays}</span>
-                            <span className="text-xs text-slate-400 ml-0.5">天</span>
-                          </td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span className="text-sm font-medium text-green-700">{stats.normal}</span>
-                          </td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span className={`text-sm font-semibold ${stats.abnormal > 0 ? "text-amber-600" : "text-slate-400"}`}>{stats.abnormal}</span>
-                          </td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span className={`text-sm font-semibold ${stats.pending > 0 ? "text-violet-600" : "text-slate-400"}`}>{stats.pending}</span>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all ${stats.rate >= 90 ? "bg-green-500" : stats.rate >= 75 ? "bg-amber-400" : "bg-red-500"}`}
-                                  style={{ width: `${stats.rate}%` }} />
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="text-sm text-slate-700">{emp.jobTitle}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">{emp.store}</div>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className="text-sm font-medium text-slate-900">{stats.pastDays}</span>
+                              <span className="text-xs text-slate-400 ml-0.5">天</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center"><span className="text-sm font-medium text-green-700">{stats.normal}</span></td>
+                            <td className="px-4 py-3.5 text-center"><span className={`text-sm font-semibold ${stats.abnormal > 0 ? "text-amber-600" : "text-slate-400"}`}>{stats.abnormal}</span></td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className="text-sm font-medium text-slate-700 tabular-nums">{stats.scheduledHours}</span>
+                              <span className="text-xs text-slate-400 ml-0.5">h</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className={`text-sm font-semibold tabular-nums ${stats.actualHours < stats.scheduledHours * 0.9 ? "text-amber-600" : "text-slate-900"}`}>{stats.actualHours}</span>
+                              <span className="text-xs text-slate-400 ml-0.5">h</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center"><span className={`text-sm font-semibold ${stats.pending > 0 ? "text-violet-600" : "text-slate-400"}`}>{stats.pending}</span></td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all ${stats.rate >= 90 ? "bg-green-500" : stats.rate >= 75 ? "bg-amber-400" : "bg-red-500"}`} style={{ width: `${stats.rate}%` }} />
+                                </div>
+                                <span className={`text-xs font-medium w-9 shrink-0 tabular-nums ${stats.rate >= 90 ? "text-green-700" : stats.rate >= 75 ? "text-amber-700" : "text-red-600"}`}>{stats.rate}%</span>
                               </div>
-                              <span className={`text-xs font-medium w-8 shrink-0 ${stats.rate >= 90 ? "text-green-700" : stats.rate >= 75 ? "text-amber-700" : "text-red-600"}`}>
-                                {stats.rate}%
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <button
-                              onClick={() => navigate(`/attendance-employee?id=${emp.id}`)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
-                            >
-                              <Calendar className="w-3 h-3" />查看考勤
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <button onClick={() => navigate(`/attendance-employee?id=${emp.id}`)}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors">
+                                <Calendar className="w-3 h-3" />月曆
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Daily detail view placeholder — redirect to employee page */}
+              {overviewDisplay === "detail" && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
+                  <p className="text-sm text-slate-500 mb-4">每日打卡明細請選擇員工後查看月曆詳情</p>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    {filteredEmployees.map(emp => (
+                      <button key={emp.id} onClick={() => navigate(`/attendance-employee?id=${emp.id}`)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-slate-900">{emp.name}</div>
+                          <div className="text-xs text-slate-400">{emp.jobTitle}</div>
+                        </div>
+                        <Calendar className="w-3.5 h-3.5 text-blue-500 ml-1" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
