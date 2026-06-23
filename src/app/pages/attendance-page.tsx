@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import {
   CheckCircle2, XCircle, Clock,
   Search, X, ChevronDown, Calendar, FileText,
-  ClipboardCheck, Image as ImageIcon, LayoutList, BarChart2,
+  ClipboardCheck, Image as ImageIcon, LayoutList, BarChart2, Table2,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -654,23 +654,15 @@ function CorrectionReviewPanel({ request, onClose, onApprove, onReject }: {
 // ── Main page ──────────────────────────────────────────────
 export function AttendancePage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"overview" | "corrections">("overview");
-  const [corrections, setCorrections] = useState<CorrectionRequest[]>(INITIAL_CORRECTIONS);
+  const [corrections] = useState<CorrectionRequest[]>(INITIAL_CORRECTIONS);
   const [search, setSearch] = useState("");
-  const [overviewDisplay, setOverviewDisplay] = useState<"summary" | "detail">("summary");
-  const [corrFilter, setCorrFilter] = useState("all");
-  const [reviewTarget, setReviewTarget] = useState<CorrectionRequest | null>(null);
+  const [overviewDisplay, setOverviewDisplay] = useState<"summary" | "matrix">("matrix");
+  const [matrixDateFilter, setMatrixDateFilter] = useState<string | null>(null);
 
-  const pendingCount = corrections.filter(c => c.status === "待審核").length;
-
-  const handleApprove = (id: string) => {
-    const now = new Date().toISOString().slice(0,10) + " " + new Date().toTimeString().slice(0,5);
-    setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: "已批准", reviewedAt: now, reviewNote: "補卡已批准" } : c));
-  };
-  const handleReject = (id: string, note: string) => {
-    const now = new Date().toISOString().slice(0,10) + " " + new Date().toTimeString().slice(0,5);
-    setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: "已拒絕", reviewedAt: now, reviewNote: note } : c));
-  };
+  // Pending counts for application summary cards
+  const PENDING_CORRECTIONS = 3;
+  const PENDING_LEAVES       = 2;
+  const PENDING_OVERTIMES    = 2;
 
   const filteredEmployees = HIRED_EMPLOYEES.filter(e =>
     !search || e.name.includes(search) || e.jobTitle.includes(search)
@@ -692,7 +684,7 @@ export function AttendancePage() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-white border-b border-slate-200 px-8 py-4 shrink-0">
           <div className="flex items-center justify-between">
-            <div><h1 className="text-xl font-semibold text-slate-900">考勤管理</h1><p className="text-sm text-slate-500 mt-0.5">按員工查看月度考勤狀況及補卡審核</p></div>
+            <div><h1 className="text-xl font-semibold text-slate-900">考勤管理</h1><p className="text-sm text-slate-500 mt-0.5">查看月度考勤狀況及處理各類申請</p></div>
             <NotificationDropdown />
           </div>
         </header>
@@ -705,52 +697,53 @@ export function AttendancePage() {
               { label: "本月在職人數",    value: HIRED_EMPLOYEES.length,                                                          sub: "目前在職",     color: "bg-white border-slate-200 text-slate-900" },
               { label: "整體出勤率",      value: `${overallRate}%`,                                                               sub: "本月至今",     color: overallRate >= 90 ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-200 text-amber-800" },
               { label: "有考勤異常",      value: `${allStats.filter(x => x.stats.abnormal > 0).length} 人`,                       sub: "遲到早退或缺勤", color: "bg-amber-50 border-amber-200 text-amber-800" },
-              { label: "補卡待審核",      value: `${pendingCount} 件`,                                                            sub: "需要審核",     color: pendingCount > 0 ? "bg-violet-50 border-violet-200 text-violet-800" : "bg-white border-slate-200 text-slate-900" },
+              { label: "補卡待審核",  value: `${corrections.filter(c => c.status === "待審核").length} 件`, sub: "需要審核", color: "bg-white border-slate-200 text-slate-900" },
             ].map(c => (
               null
             ))}
           </div>
 
-          {/* Tabs + display toggle */}
-          <div className="flex items-center justify-between mb-5 border-b border-slate-200">
-            <div className="flex items-center gap-1">
-              {([
-                { key: "overview",    label: "考勤總覽",  count: hasAction },
-                { key: "corrections", label: "補卡審核",  count: pendingCount },
-              ] as const).map(tab => (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-2.5 text-sm font-medium relative transition-colors ${activeTab === tab.key ? "text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
-                  {tab.label}
-                  {tab.count > 0 && <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-600"}`}>{tab.count}</span>}
-                  {activeTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t" />}
-                </button>
-              ))}
-            </div>
-            {activeTab === "overview" && (
-              <div className="flex bg-slate-100 rounded-lg p-0.5 mb-1">
-                <button onClick={() => setOverviewDisplay("summary")} title="月度彙總"
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${overviewDisplay === "summary" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                  <BarChart2 className="w-3.5 h-3.5" />月度彙總
-                </button>
-                <button onClick={() => setOverviewDisplay("detail")} title="每日明細"
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${overviewDisplay === "detail" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                  <LayoutList className="w-3.5 h-3.5" />每日明細
-                </button>
-              </div>
-            )}
+          {/* Application summary cards */}
+          <div className="flex items-center gap-2 mb-5">
+            {([
+              { key: "correction", label: "補卡申請",  count: PENDING_CORRECTIONS, icon: <ClipboardCheck className="w-3.5 h-3.5" />, textColor: "text-violet-600", bg: "bg-violet-50 border-violet-200 hover:bg-violet-100" },
+              { key: "leave",      label: "請假申請",  count: PENDING_LEAVES,      icon: <Calendar className="w-3.5 h-3.5" />,       textColor: "text-blue-600",   bg: "bg-blue-50 border-blue-200 hover:bg-blue-100" },
+              { key: "overtime",   label: "加班申請",  count: PENDING_OVERTIMES,   icon: <Clock className="w-3.5 h-3.5" />,           textColor: "text-amber-600",  bg: "bg-amber-50 border-amber-200 hover:bg-amber-100" },
+            ] as const).map(a => (
+              <button key={a.key} onClick={() => navigate(`/attendance-applications?type=${a.key}`)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${a.bg}`}>
+                <span className={a.textColor}>{a.icon}</span>
+                <span className="text-slate-800">{a.label}</span>
+                {a.count > 0 && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-semibold leading-none">{a.count}</span>}
+              </button>
+            ))}
           </div>
 
-          {/* ── Overview tab ── */}
-          {activeTab === "overview" && (
-            <>
-              <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-sm">
-                <div className="relative max-w-xs">
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋員工姓名或職位…"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
-                </div>
+          {/* View toggle */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="text-sm font-semibold text-slate-800">考勤總覽</div>
+            <div className="flex bg-slate-100 rounded-lg p-0.5">
+              <button onClick={() => setOverviewDisplay("matrix")} title="月曆矩陣"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${overviewDisplay === "matrix" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                <Table2 className="w-3.5 h-3.5" />月曆矩陣
+              </button>
+              <button onClick={() => setOverviewDisplay("summary")} title="月度彙總"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${overviewDisplay === "summary" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                <BarChart2 className="w-3.5 h-3.5" />月度彙總
+              </button>
+            </div>
+          </div>
+
+          {/* Overview content */}
+          <>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-sm">
+              <div className="relative max-w-xs">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋員工姓名或職位…"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
               </div>
+            </div>
 
               {/* Monthly summary view */}
               {overviewDisplay === "summary" && (
@@ -831,30 +824,197 @@ export function AttendancePage() {
                 </div>
               )}
 
-              {/* Daily detail view placeholder — redirect to employee page */}
+              {/* Quick navigation view */}
               {overviewDisplay === "detail" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
-                  <p className="text-sm text-slate-500 mb-4">每日打卡明細請選擇員工後查看月曆詳情</p>
+                  <p className="text-sm text-slate-500 mb-4">選擇員工查看完整月曆考勤詳情</p>
                   <div className="flex flex-wrap gap-3 justify-center">
-                    {filteredEmployees.map(emp => (
-                      <button key={emp.id} onClick={() => navigate(`/attendance-employee?id=${emp.id}`)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-colors">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
-                        <div className="text-left">
-                          <div className="text-sm font-medium text-slate-900">{emp.name}</div>
-                          <div className="text-xs text-slate-400">{emp.jobTitle}</div>
-                        </div>
-                        <Calendar className="w-3.5 h-3.5 text-blue-500 ml-1" />
-                      </button>
-                    ))}
+                    {filteredEmployees.map(emp => {
+                      const { stats: s } = allStats.find(x => x.emp.id === emp.id)!;
+                      return (
+                        <button key={emp.id} onClick={() => navigate(`/attendance-employee?id=${emp.id}`)}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-colors text-left">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
+                          <div>
+                            <div className="text-sm font-medium text-slate-900">{emp.name}</div>
+                            <div className="text-xs text-slate-400">{s.normal}正常 · {s.abnormal > 0 ? <span className="text-amber-500">{s.abnormal}異常</span> : "0異常"}</div>
+                          </div>
+                          <Calendar className="w-3.5 h-3.5 text-blue-500 ml-1 shrink-0" />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
-            </>
-          )}
 
-          {/* ── Corrections tab ── */}
-          {activeTab === "corrections" && (
+              {/* Attendance matrix view */}
+              {overviewDisplay === "matrix" && (() => {
+                const matYear = CUR_YEAR, matMonth = CUR_MONTH;
+                const daysInMonth = new Date(matYear, matMonth, 0).getDate();
+                const monthDates = Array.from({length: daysInMonth}, (_, i) => {
+                  const d = i + 1;
+                  return `${matYear}-${String(matMonth).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                });
+                const corrMap = new Map(corrections.map(c => [c.id, c.status]));
+                const getRecord = (empId: string, dateStr: string) =>
+                  (INITIAL_MONTHLY_RECORDS[empId] ?? []).find(r => r.date === dateStr);
+                const getEff = (r: DayRecord): DayStatus => {
+                  if (r.correctionId && corrMap.get(r.correctionId) === "已批准") return "已補卡";
+                  return r.status;
+                };
+                const matrixEmps = matrixDateFilter
+                  ? filteredEmployees.filter(e => { const r = getRecord(e.id, matrixDateFilter); return r && r.status !== "未排班" && r.status !== "待上班"; })
+                  : filteredEmployees;
+                const getDatePresentCount = (dateStr: string) =>
+                  filteredEmployees.filter(e => { const r = getRecord(e.id, dateStr); return r && ["正常","遲到早退","已補卡"].includes(r ? getEff(r) : "未排班"); }).length;
+                const getEmpAttSummary = (empId: string) => {
+                  const recs = (INITIAL_MONTHLY_RECORDS[empId] ?? []).filter(r => r.status !== "未排班" && r.status !== "待上班");
+                  const days = recs.filter(r => ["正常","遲到早退","已補卡"].includes(getEff(r))).length;
+                  let hours = 0;
+                  for (const r of recs) {
+                    if (r.clockIn?.time && r.clockOut?.time) {
+                      const [ih, im] = r.clockIn.time.split(":").map(Number);
+                      const [oh, om] = r.clockOut.time.split(":").map(Number);
+                      hours += Math.max(0, (oh*60+om - ih*60-im) / 60);
+                    }
+                  }
+                  return { days, hours: Math.round(hours * 10) / 10 };
+                };
+                const STATUS_CELL: Record<string, string> = {
+                  "正常": "bg-green-100 text-green-700", "遲到早退": "bg-amber-100 text-amber-700",
+                  "缺勤": "bg-red-100 text-red-600", "補卡待審核": "bg-violet-100 text-violet-700",
+                  "已補卡": "bg-teal-100 text-teal-700",
+                };
+                const WDAY_S = ["日","一","二","三","四","五","六"];
+                const fmtCell = (empId: string, dateStr: string): React.ReactNode => {
+                  const r = getRecord(empId, dateStr);
+                  if (!r || r.status === "未排班") return null;
+                  if (r.status === "待上班") return <span className="text-[8px] text-slate-400">待</span>;
+                  const eff = getEff(r);
+                  const sc = STATUS_CELL[eff] ?? "bg-slate-100 text-slate-500";
+                  const h = (t: string) => { const [hr, m] = t.split(":").map(Number); return m === 0 ? String(hr) : t; };
+                  const hasClockIn = !!r.clockIn?.time;
+                  const hrs = r.clockIn?.time && r.clockOut?.time
+                    ? Math.round(Math.max(0, (new Date(`1970-01-01T${r.clockOut.time}`).getTime() - new Date(`1970-01-01T${r.clockIn.time}`).getTime()) / 3600000) * 10) / 10
+                    : null;
+                  return (
+                    <div className={`rounded px-0.5 py-0.5 ${sc}`} style={{ fontSize: "8px", lineHeight: "1.3" }}>
+                      {r.scheduledStart && <div className="text-[7px] opacity-60">{h(r.scheduledStart)}-{h(r.scheduledEnd ?? "")}</div>}
+                      {hasClockIn && <div className="font-medium">{h(r.clockIn!.time)}{r.clockOut ? `-${h(r.clockOut.time)}` : ""}</div>}
+                      {hrs !== null && <div className="opacity-80">{hrs}h</div>}
+                      {!hasClockIn && <div className="text-[7px]">{eff === "缺勤" ? "✗" : eff === "補卡待審核" ? "○" : ""}</div>}
+                    </div>
+                  );
+                };
+                return (
+                  <>
+                    <div className="flex items-center gap-3 mb-4 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-900">{matYear}年{matMonth}月 考勤矩陣</span>
+                      {matrixDateFilter && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium">
+                          篩選：{matrixDateFilter.slice(5).replace("-","月")}日（{getDatePresentCount(matrixDateFilter)} 人出勤）
+                          <button onClick={() => setMatrixDateFilter(null)} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-400 ml-auto">點擊日期列標題篩選當天出勤</span>
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm" style={{ overflowX: "auto" }}>
+                      <table style={{ minWidth: `${200 + daysInMonth * 62 + 140}px`, borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <th style={{ position:"sticky", left:0, zIndex:3, background:"#f8fafc", minWidth:"180px", maxWidth:"180px" }}
+                              className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-200">
+                              員工 / 工種 / 類型
+                            </th>
+                            {monthDates.map(dateStr => {
+                              const day = parseInt(dateStr.slice(-2), 10);
+                              const dow = new Date(dateStr).getDay();
+                              const isWknd = dow === 0 || dow === 6;
+                              const isActive = matrixDateFilter === dateStr;
+                              const cnt = getDatePresentCount(dateStr);
+                              return (
+                                <th key={dateStr} style={{ minWidth:"60px", maxWidth:"60px" }}
+                                  className={`py-1.5 px-0.5 border-r border-slate-100 text-center cursor-pointer select-none transition-colors ${isActive ? "bg-blue-100" : isWknd ? "bg-rose-50" : "hover:bg-slate-100"}`}
+                                  onClick={() => setMatrixDateFilter(isActive ? null : dateStr)}>
+                                  <div className={`text-xs font-semibold ${isActive ? "text-blue-700" : isWknd ? "text-rose-500" : "text-slate-700"}`}>{day}</div>
+                                  <div className={`text-[9px] ${isActive ? "text-blue-500" : isWknd ? "text-rose-400" : "text-slate-400"}`}>{WDAY_S[dow]}</div>
+                                  {!matrixDateFilter && cnt > 0 && <div className="text-[8px] text-green-600 font-medium">{cnt}</div>}
+                                  {isActive && <div className="w-full h-0.5 bg-blue-500 mt-0.5 rounded-full" />}
+                                </th>
+                              );
+                            })}
+                            <th className="px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap border-l border-slate-200" style={{ minWidth:"55px" }}>出勤</th>
+                            <th className="px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap" style={{ minWidth:"55px" }}>工時</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matrixEmps.length === 0 ? (
+                            <tr><td colSpan={daysInMonth + 3} className="py-12 text-center text-sm text-slate-400">{matrixDateFilter ? "當日無出勤記錄" : "本月暫無考勤記錄"}</td></tr>
+                          ) : matrixEmps.map((emp, idx) => {
+                            const summary = getEmpAttSummary(emp.id);
+                            return (
+                              <tr key={emp.id} className={`border-b border-slate-50 last:border-0 ${idx % 2 === 1 ? "bg-slate-50/40" : ""}`}>
+                                <td style={{ position:"sticky", left:0, zIndex:2, background: idx % 2 === 1 ? "#f9fafb" : "white", minWidth:"180px", maxWidth:"180px" }}
+                                  className="px-3 py-2 border-r border-slate-200">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-slate-900 truncate">{emp.name}</div>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <span className="text-[9px] text-slate-500 truncate">{emp.jobTitle}</span>
+                                        <span className={`text-[8px] px-1 py-0 rounded border font-medium shrink-0 ${emp.hiringType === "全職" ? "bg-blue-50 text-blue-600 border-blue-200" : emp.hiringType === "兼職" ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-violet-50 text-violet-600 border-violet-200"}`}>{emp.hiringType}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                {monthDates.map(dateStr => {
+                                  const isActive = matrixDateFilter === dateStr;
+                                  return (
+                                    <td key={dateStr} style={{ minWidth:"60px", maxWidth:"60px" }}
+                                      className={`text-center px-0.5 py-1 border-r border-slate-100 align-top ${isActive ? "bg-blue-50" : ""}`}>
+                                      {fmtCell(emp.id, dateStr)}
+                                    </td>
+                                  );
+                                })}
+                                <td className="text-center px-2 py-2 border-l border-slate-200">
+                                  <span className={`text-xs font-semibold ${summary.days > 0 ? "text-green-700" : "text-slate-300"}`}>{summary.days}</span>
+                                  <span className="text-[9px] text-slate-400 ml-0.5">天</span>
+                                </td>
+                                <td className="text-center px-2 py-2">
+                                  <span className={`text-xs font-semibold ${summary.hours > 0 ? "text-slate-900" : "text-slate-300"}`}>{summary.hours}</span>
+                                  <span className="text-[9px] text-slate-400 ml-0.5">h</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {/* Date filter summary row */}
+                          {matrixDateFilter && (
+                            <tr className="bg-green-50 border-t border-green-200">
+                              <td style={{ position:"sticky", left:0, zIndex:2, background:"#f0fdf4" }} className="px-3 py-2 border-r border-green-200 text-xs font-semibold text-green-800">
+                                當日出勤 {getDatePresentCount(matrixDateFilter)} 人
+                              </td>
+                              {monthDates.map(d => (
+                                <td key={d} className={`text-center px-0.5 py-2 border-r border-green-100 text-xs font-semibold ${d === matrixDateFilter ? "text-green-700" : "text-transparent"}`}>
+                                  {d === matrixDateFilter ? `${getDatePresentCount(d)}人` : "·"}
+                                </td>
+                              ))}
+                              <td className="border-l border-green-200" /><td />
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mt-2 flex items-center gap-4 text-[10px] text-slate-400 flex-wrap">
+                      {[["bg-green-100 text-green-700","正常"],["bg-amber-100 text-amber-700","遲到早退"],["bg-red-100 text-red-600","缺勤"],["bg-violet-100 text-violet-700","補卡待審核"],["bg-teal-100 text-teal-700","已補卡"]].map(([cls, label]) => (
+                        <span key={label} className="flex items-center gap-1"><span className={`w-3 h-3 rounded shrink-0 ${cls}`} />{label}</span>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          {/* ── REMOVED Corrections tab (now separate page) ── */}
+          {false && (
             <>
               <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-sm">
                 <div className="relative">
@@ -916,15 +1076,6 @@ export function AttendancePage() {
         </main>
       </div>
 
-      {/* Correction review panel */}
-      {reviewTarget && (
-        <CorrectionReviewPanel
-          request={reviewTarget}
-          onClose={() => setReviewTarget(null)}
-          onApprove={handleApprove}
-          onReject={handleReject}
-        />
-      )}
     </div>
   );
 }

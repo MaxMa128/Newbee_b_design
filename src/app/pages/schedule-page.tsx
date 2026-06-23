@@ -313,6 +313,49 @@ function SCard({ label, value, sub, color }: { label: string; value: string; sub
 }
 
 // ── Main Page ──────────────────────────────────────────────
+function getWeekKeyForDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  const dow = d.getDay();
+  const daysFromMon = dow === 0 ? 6 : dow - 1;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - daysFromMon);
+  mon.setHours(0, 0, 0, 0);
+  return mon.toISOString().slice(0, 10);
+}
+
+function buildDemoSchedules(): Record<string, ScheduleMap> {
+  // Pre-populated demo data representing onboarding-confirmed schedules
+  const result: Record<string, ScheduleMap> = {};
+  const weeks = ["2026-06-01","2026-06-08","2026-06-15","2026-06-22","2026-06-29"];
+  for (const wk of weeks) {
+    const dates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(wk); d.setDate(d.getDate() + i);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    const ws: ScheduleMap = {};
+    for (const emp of HIRED_EMPLOYEES) {
+      ws[emp.id] = {};
+      for (const date of dates) {
+        const dow = new Date(date).getDay();
+        const wKey = WEEKDAY_KEYS[dow === 0 ? 6 : dow - 1];
+        ws[emp.id][date] = emp.defaultDays.includes(wKey)
+          ? { startTime: emp.defaultStart, endTime: emp.defaultEnd, isDayOff: false, isDefault: false }
+          : null;
+      }
+    }
+    result[wk] = ws;
+  }
+  return result;
+}
+
+function fmtShiftCompact(shift: ShiftSlot | null): string | null {
+  if (!shift) return null;
+  if (shift.isDayOff) return "休";
+  const h = (t: string) => { const [hr, m] = t.split(":").map(Number); return m === 0 ? String(hr) : t; };
+  return `${h(shift.startTime)}-${h(shift.endTime)}`;
+}
+
 function getMonthlyStats(emp: HiredEmployee, year: number, month: number) {
   const days = new Date(year, month, 0).getDate();
   let scheduledDays = 0, hours = 0;
@@ -340,7 +383,8 @@ export function SchedulePage() {
   const [posSearch, setPosSearch]     = useState("");
   const [posDropdownOpen, setPosDropdownOpen] = useState(false);
   const posDropdownRef = useRef<HTMLDivElement>(null);
-  const [allSchedules, setAllSchedules] = useState<Record<string, ScheduleMap>>({});
+  const [allSchedules, setAllSchedules] = useState<Record<string, ScheduleMap>>(() => buildDemoSchedules());
+  const [listDateFilter, setListDateFilter] = useState<string | null>(null);
   const [editTarget, setEditTarget]   = useState<EditTarget | null>(null);
   const [exportToast, setExportToast] = useState(false);
 
@@ -357,11 +401,11 @@ export function SchedulePage() {
   const weekDates = getWeekDates(weekOffset);
   const weekKey   = weekDates[0];
 
-  const schedule: ScheduleMap = allSchedules[weekKey] ?? buildEmptySchedule(HIRED_EMPLOYEES, weekDates);
-
-  if (!allSchedules[weekKey]) {
-    setAllSchedules(prev => ({ ...prev, [weekKey]: buildEmptySchedule(HIRED_EMPLOYEES, weekDates) }));
-  }
+  const schedule: ScheduleMap = allSchedules[weekKey] ?? (() => {
+    const s = buildEmptySchedule(HIRED_EMPLOYEES, weekDates);
+    setAllSchedules(prev => ({ ...prev, [weekKey]: s }));
+    return s;
+  })();
 
   const positions = Array.from(new Set(HIRED_EMPLOYEES.map(e => e.jobTitle)));
   const filteredPositions = posSearch
@@ -439,66 +483,169 @@ export function SchedulePage() {
         <main className="flex-1 p-8 overflow-auto">
 
           {/* ── List view ── */}
-          {displayType === "list" && (
-            <>
-              <div className="flex items-center gap-3 mb-5">
-                <button onClick={() => setListMonth(m => m.month === 1 ? {year:m.year-1,month:12} : {...m,month:m.month-1})} className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"><ChevronLeft className="w-4 h-4 text-slate-600" /></button>
-                <span className="text-sm font-semibold text-slate-900 min-w-[100px] text-center">{listMonth.year}年{listMonth.month}月</span>
-                <button onClick={() => setListMonth(m => m.month === 12 ? {year:m.year+1,month:1} : {...m,month:m.month+1})} className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"><ChevronRight className="w-4 h-4 text-slate-600" /></button>
-                <span className="text-xs text-slate-400">共 {displayedEmployees.length} 人</span>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <th className="px-4 py-3 text-left w-[160px]">員工</th>
-                      <th className="px-4 py-3 text-left w-[120px]">工種 / 門店</th>
-                      <th className="px-4 py-3 text-left w-[80px]">類型</th>
-                      <th className="px-4 py-3 text-center w-[90px]">應排班天數</th>
-                      <th className="px-4 py-3 text-center w-[90px]">應排班工時</th>
-                      <th className="px-4 py-3 text-left w-[160px]">工作日</th>
-                      <th className="px-4 py-3 text-left w-[120px]">每日時段</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedEmployees.map((emp, idx) => {
-                      const stats = getMonthlyStats(emp, listMonth.year, listMonth.month);
-                      return (
-                        <tr key={emp.id} className={`border-b border-slate-50 last:border-0 ${idx % 2 === 0 ? "" : "bg-slate-50/30"}`}>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
-                              <span className="font-medium text-slate-900">{emp.name}</span>
-                            </div>
+          {displayType === "list" && (() => {
+            const daysInMonth = new Date(listMonth.year, listMonth.month, 0).getDate();
+            const monthDates = Array.from({length: daysInMonth}, (_, i) => {
+              const d = i + 1;
+              return `${listMonth.year}-${String(listMonth.month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+            });
+
+            const getShift = (empId: string, dateStr: string): ShiftSlot | null =>
+              allSchedules[getWeekKeyForDate(dateStr)]?.[empId]?.[dateStr] ?? null;
+
+            const getEmpSummary = (empId: string) => {
+              let days = 0, hours = 0;
+              for (const d of monthDates) {
+                const s = getShift(empId, d);
+                if (s && !s.isDayOff) {
+                  days++;
+                  const [sh, sm] = s.startTime.split(":").map(Number);
+                  const [eh, em] = s.endTime.split(":").map(Number);
+                  hours += (eh * 60 + em - sh * 60 - sm) / 60;
+                }
+              }
+              return { days, hours: Math.round(hours * 10) / 10 };
+            };
+
+            const getDateCount = (dateStr: string) =>
+              displayedEmployees.filter(e => { const s = getShift(e.id, dateStr); return s && !s.isDayOff; }).length;
+
+            const matrixEmps = listDateFilter
+              ? displayedEmployees.filter(e => { const s = getShift(e.id, listDateFilter); return s && !s.isDayOff; })
+              : displayedEmployees;
+
+            const WDAY_SHORT = ["日","一","二","三","四","五","六"];
+
+            return (
+              <>
+                {/* Month nav + search + active filter pill */}
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setListMonth(m => m.month === 1 ? {year:m.year-1,month:12} : {...m,month:m.month-1})} className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50"><ChevronLeft className="w-4 h-4 text-slate-600" /></button>
+                    <span className="text-sm font-semibold text-slate-900 min-w-[90px] text-center">{listMonth.year}年{listMonth.month}月</span>
+                    <button onClick={() => setListMonth(m => m.month === 12 ? {year:m.year+1,month:1} : {...m,month:m.month+1})} className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50"><ChevronRight className="w-4 h-4 text-slate-600" /></button>
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-400" />
+                    <input value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="搜尋員工…"
+                      className="h-8 pl-8 pr-3 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-36" />
+                    {empSearch && <button onClick={() => setEmpSearch("")} className="absolute right-2 top-2 text-slate-400"><X className="w-3.5 h-3.5" /></button>}
+                  </div>
+                  {listDateFilter && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium">
+                      篩選：{listDateFilter.slice(5).replace("-","月")}日（{getDateCount(listDateFilter)} 人有排班）
+                      <button onClick={() => setListDateFilter(null)} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
+                    </span>
+                  )}
+                  <span className="text-xs text-slate-400 ml-auto">點擊日期列標題可篩選當天排班</span>
+                </div>
+
+                {/* Matrix table */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm" style={{ overflowX: "auto" }}>
+                  <table style={{ minWidth: `${200 + daysInMonth * 58 + 140}px`, borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-xs">
+                        {/* Sticky employee header */}
+                        <th style={{ position:"sticky", left:0, zIndex:3, background:"#f8fafc", minWidth:"180px", maxWidth:"180px" }}
+                          className="px-3 py-3 text-left border-r border-slate-200 font-semibold text-slate-500 uppercase tracking-wide">
+                          員工 / 工種 / 類型
+                        </th>
+                        {/* Date headers */}
+                        {monthDates.map(dateStr => {
+                          const day = parseInt(dateStr.slice(-2), 10);
+                          const dow = new Date(dateStr).getDay();
+                          const isWeekend = dow === 0 || dow === 6;
+                          const isActive = listDateFilter === dateStr;
+                          const cnt = getDateCount(dateStr);
+                          return (
+                            <th key={dateStr} style={{ minWidth:"56px", maxWidth:"56px" }}
+                              className={`py-1.5 px-0.5 border-r border-slate-100 text-center cursor-pointer select-none transition-colors ${isActive ? "bg-blue-100 border-blue-200" : isWeekend ? "bg-rose-50" : "hover:bg-slate-100"}`}
+                              onClick={() => setListDateFilter(isActive ? null : dateStr)}>
+                              <div className={`text-xs font-semibold ${isActive ? "text-blue-700" : isWeekend ? "text-rose-500" : "text-slate-700"}`}>{day}</div>
+                              <div className={`text-[9px] ${isActive ? "text-blue-500" : isWeekend ? "text-rose-400" : "text-slate-400"}`}>{WDAY_SHORT[dow]}</div>
+                              {!listDateFilter && cnt > 0 && <div className="text-[8px] text-blue-500 font-medium">{cnt}</div>}
+                              {isActive && <div className="w-full h-0.5 bg-blue-500 mt-0.5 rounded-full" />}
+                            </th>
+                          );
+                        })}
+                        {/* Summary headers */}
+                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap border-l border-slate-200" style={{ minWidth:"60px" }}>天數</th>
+                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap" style={{ minWidth:"60px" }}>工時</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {matrixEmps.length === 0 ? (
+                        <tr><td colSpan={daysInMonth + 3} className="py-12 text-center text-sm text-slate-400">
+                          {listDateFilter ? "當日無排班人員" : "本月暫無排班記錄"}
+                        </td></tr>
+                      ) : matrixEmps.map((emp, idx) => {
+                        const summary = getEmpSummary(emp.id);
+                        return (
+                          <tr key={emp.id} className={`border-b border-slate-50 last:border-0 ${idx % 2 === 1 ? "bg-slate-50/40" : ""}`}>
+                            {/* Sticky employee cell */}
+                            <td style={{ position:"sticky", left:0, zIndex:2, background: idx % 2 === 1 ? "#f9fafb" : "white", minWidth:"180px", maxWidth:"180px" }}
+                              className="px-3 py-2.5 border-r border-slate-200">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${avatarColor(emp.id)}`}>{emp.name[0]}</div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold text-slate-900 truncate">{emp.name}</div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-[9px] text-slate-500 truncate">{emp.jobTitle}</span>
+                                    <span className={`text-[8px] px-1 py-0 rounded border font-medium shrink-0 ${emp.hiringType === "全職" ? "bg-blue-50 text-blue-600 border-blue-200" : emp.hiringType === "兼職" ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-violet-50 text-violet-600 border-violet-200"}`}>{emp.hiringType}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            {/* Day cells */}
+                            {monthDates.map(dateStr => {
+                              const shift = getShift(emp.id, dateStr);
+                              const text = fmtShiftCompact(shift);
+                              const isActive = listDateFilter === dateStr;
+                              return (
+                                <td key={dateStr} style={{ minWidth:"56px", maxWidth:"56px" }}
+                                  className={`text-center px-0.5 py-2 border-r border-slate-100 ${isActive ? "bg-blue-50" : ""}`}>
+                                  {text === "休" ? (
+                                    <span className="text-[9px] text-slate-400 font-medium">休</span>
+                                  ) : text ? (
+                                    <span className="text-[9px] font-semibold text-blue-700 leading-tight block">{text}</span>
+                                  ) : null}
+                                </td>
+                              );
+                            })}
+                            {/* Summary cells */}
+                            <td className="text-center px-2 py-2 border-l border-slate-200">
+                              <span className={`text-xs font-semibold ${summary.days > 0 ? "text-slate-900" : "text-slate-300"}`}>{summary.days}</span>
+                              <span className="text-[9px] text-slate-400 ml-0.5">天</span>
+                            </td>
+                            <td className="text-center px-2 py-2">
+                              <span className={`text-xs font-semibold ${summary.hours > 0 ? "text-slate-900" : "text-slate-300"}`}>{summary.hours}</span>
+                              <span className="text-[9px] text-slate-400 ml-0.5">h</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {/* Date filter summary row */}
+                      {listDateFilter && (
+                        <tr className="bg-blue-50 border-t border-blue-200">
+                          <td style={{ position:"sticky", left:0, zIndex:2, background:"#eff6ff" }}
+                            className="px-3 py-2 border-r border-blue-200 text-xs font-semibold text-blue-800">
+                            當日合計 {getDateCount(listDateFilter)} 人
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="text-sm text-slate-700">{emp.jobTitle}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{emp.store}</div>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full border text-[11px] font-medium ${emp.hiringType === "全職" ? "bg-blue-50 text-blue-700 border-blue-200" : emp.hiringType === "兼職" ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-violet-50 text-violet-700 border-violet-200"}`}>{emp.hiringType}</span>
-                          </td>
-                          <td className="px-4 py-3.5 text-center"><span className="text-sm font-semibold text-slate-900">{stats.scheduledDays}</span><span className="text-xs text-slate-400 ml-0.5">天</span></td>
-                          <td className="px-4 py-3.5 text-center"><span className="text-sm font-semibold text-slate-900">{stats.hours}</span><span className="text-xs text-slate-400 ml-0.5">h</span></td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex flex-wrap gap-1">
-                              {emp.defaultDays.map(d => (
-                                <span key={d} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-medium">
-                                  {WEEKDAY_LABELS[WEEKDAY_KEYS.indexOf(d)]}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3.5 text-sm text-slate-700 tabular-nums">{emp.defaultStart} – {emp.defaultEnd}</td>
+                          {monthDates.map(d => (
+                            <td key={d} className={`text-center px-0.5 py-2 border-r border-blue-100 text-xs font-semibold ${d === listDateFilter ? "text-blue-700" : "text-transparent"}`}>
+                              {d === listDateFilter ? `${getDateCount(d)}人` : "·"}
+                            </td>
+                          ))}
+                          <td className="border-l border-blue-200" /><td />
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-3 text-xs text-slate-400 text-right">{listMonth.year}年{listMonth.month}月 · 共 {displayedEmployees.length} 人</div>
-            </>
-          )}
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-2 text-xs text-slate-400">{listMonth.year}年{listMonth.month}月 · 共 {matrixEmps.length} 人 · 點擊日期列標題篩選，再次點擊取消</div>
+              </>
+            );
+          })()}
 
           {displayType === "calendar" && (<>
 

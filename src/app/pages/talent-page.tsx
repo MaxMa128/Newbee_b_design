@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { CANDIDATE_HISTORY_MAP, getHistoryStats } from "../data/candidateHistory";
+import { HistoryPanel } from "../components/HistoryPanel";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { NotificationDropdown } from "../components/NotificationDropdown";
@@ -856,8 +857,8 @@ function ReviewModal({
 
 // ── Manage Hired Modal ─────────────────────────────────────
 const REVOKE_REASONS = [
-  { value: "position_change", label: "崗位或平台變動" },
-  { value: "candidate_change", label: "候選人工作變動" },
+  { value: "position_change", label: "商户原因" },
+  { value: "candidate_change", label: "人才原因" },
 ];
 
 function ManageHiredModal({
@@ -990,9 +991,10 @@ export function TalentPage() {
   const [ageMin, setAgeMin] = useState("");
   const [ageMax, setAgeMax] = useState("");
   const [jobFilter, setJobFilter]           = useState("all");
-  const [reviewTarget, setReviewTarget] = useState<Applicant | null>(null);
-  const [resumeTarget, setResumeTarget] = useState<Applicant | null>(null);
-  const [manageTarget, setManageTarget] = useState<Applicant | null>(null);
+  const [reviewTarget, setReviewTarget]   = useState<Applicant | null>(null);
+  const [resumeTarget, setResumeTarget]   = useState<Applicant | null>(null);
+  const [manageTarget, setManageTarget]   = useState<Applicant | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<{id: string; name: string} | null>(null);
   const [revokeDetails, setRevokeDetails] = useState<Map<string, { reason: string; detail: string }>>(new Map());
   const [viewRevokeTarget, setViewRevokeTarget] = useState<Applicant | null>(null);
 
@@ -1066,8 +1068,8 @@ export function TalentPage() {
         <header className="bg-white border-b border-slate-200 px-8 py-4 shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">求職記錄</h1>
-              <p className="text-sm text-slate-500 mt-0.5">管理所有職位的求職申請記錄</p>
+              <h1 className="text-xl font-semibold text-slate-900">候选人管理</h1>
+              <p className="text-sm text-slate-500 mt-0.5">管理所有候选人的求職申請記錄</p>
             </div>
             <NotificationDropdown />
           </div>
@@ -1219,6 +1221,7 @@ export function TalentPage() {
                       <th className="px-4 py-3 text-left w-[110px]">門店</th>
                       <th className="px-4 py-3 text-left w-[100px]">申請時間</th>
                       <th className="px-4 py-3 text-left w-[90px]">狀態</th>
+                      <th className="px-4 py-3 text-center w-[90px]">歷史記錄</th>
                       <th className="px-4 py-3 text-left w-[160px]">操作</th>
                     </tr>
                   </thead>
@@ -1308,6 +1311,20 @@ export function TalentPage() {
                           <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${STATUS_COLORS[a.appStatus]}`}>
                             {a.appStatus}
                           </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          {(() => {
+                            const hist = CANDIDATE_HISTORY_MAP.get(a.id);
+                            if (!hist) return <span className="text-xs text-slate-400">首次申請</span>;
+                            const s = getHistoryStats(hist.entries);
+                            return (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-xs text-slate-700 font-medium">{s.appCount + s.empCount} 次</span>
+                                <button onClick={() => setHistoryTarget({id: a.id, name: a.name})}
+                                  className="text-[10px] text-blue-600 hover:underline">查看詳情</button>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1450,6 +1467,15 @@ export function TalentPage() {
           </Dialog>
         );
       })()}
+
+      {/* History panel */}
+      {historyTarget && (
+        <HistoryPanel
+          candidateId={historyTarget.id}
+          displayName={historyTarget.name}
+          onClose={() => setHistoryTarget(null)}
+        />
+      )}
     </div>
   );
 }

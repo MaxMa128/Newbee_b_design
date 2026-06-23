@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Briefcase, Users, Store, Building2,
   MessageSquare, ChevronDown, ClipboardList, Briefcase as WorkIcon,
   Megaphone, FileText, CalendarDays, ClipboardCheck, CalendarClock,
-  Wallet, Users as UsersIcon, ArrowRightLeft, Layers, UserRoundCheck,
+  Wallet, Users as UsersIcon, ArrowRightLeft, Layers, UserRoundCheck, AlarmClock,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useNotifications } from "../contexts/notification-context";
@@ -14,8 +14,8 @@ interface SidebarProps {
   onContactSupport?: () => void;
 }
 
-const RECRUITMENT_PATHS = ["/jobs", "/stores", "/create-job", "/job-types"];
-const TALENT_PATHS      = ["/talent", "/work-records", "/employees"];
+const RECRUITMENT_PATHS = ["/jobs", "/stores", "/create-job", "/job-types", "/shift-templates"];
+const TALENT_PATHS      = ["/talent", "/employees"];
 const SCHEDULE_PATHS    = ["/schedule", "/attendance"];
 const FINANCE_PATHS     = ["/finance", "/finance-platform"];
 
@@ -147,13 +147,13 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                 <NavItem
                   navPath="/stores"
                   icon={<Store className="w-4 h-4" />}
-                  label="門店管理"
+                  label="工作网点管理"
                   indent
                 />
                 <NavItem
-                  navPath="/job-types"
-                  icon={<Layers className="w-4 h-4" />}
-                  label="工種管理"
+                  navPath="/shift-templates"
+                  icon={<AlarmClock className="w-4 h-4" />}
+                  label="班次管理"
                   indent
                 />
               </div>
@@ -174,7 +174,7 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                 <NavItem
                   navPath="/talent"
                   icon={<ClipboardList className="w-4 h-4" />}
-                  label="求職記錄"
+                  label="候选人管理"
                   badge={unreadTalentCount}
                   indent
                 />
@@ -182,12 +182,6 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                   navPath="/employees"
                   icon={<UserRoundCheck className="w-4 h-4" />}
                   label="雇員管理"
-                  indent
-                />
-                <NavItem
-                  navPath="/work-records"
-                  icon={<FileText className="w-4 h-4" />}
-                  label="工作記錄"
                   indent
                 />
               </div>

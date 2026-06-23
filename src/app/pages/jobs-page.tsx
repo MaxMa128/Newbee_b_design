@@ -36,6 +36,20 @@ interface Applicant {
   appType?: "normal" | "pool";
 }
 
+interface SiteConfig {
+  siteId: string;
+  siteName: string;
+  district: string;
+  address: string;
+  shiftName: string;
+  wage: string;
+  mealBreak: boolean;
+  regularCount: number;
+  backupCount: number;
+  regularFilled: number;
+  applicants: Applicant[];
+}
+
 interface Job {
   id: string;
   title: string;
@@ -63,6 +77,8 @@ interface Job {
   address: string;
   selectedStoreIds: string[];
   applicants: Applicant[];
+  // Multi-site support
+  sites?: SiteConfig[];
 }
 
 const MOCK_STORES = [
@@ -108,6 +124,16 @@ const INITIAL_JOBS: Job[] = [
       { id: "APP-002", name: "李小明", phone: "+852 6234 5678", age: 22, gender: "男", education: "副學士",   appStatus: "待審核" },
       { id: "APP-003", name: "張美儀", phone: "+852 5345 6789", age: 25, gender: "女", education: "中學",     appStatus: "待審核" },
       { id: "APP-004", name: "王志豪", phone: "+852 9456 7890", age: 31, gender: "男", education: "學士",     appStatus: "待審核" },
+    ],
+    sites: [
+      { siteId:"S001", siteName:"旺角分店",   district:"旺角",   address:"香港九龍旺角彌敦道 608 號", shiftName:"標準兼職班", wage:"HK$ 65/h", mealBreak:true,  regularCount:2, backupCount:1, regularFilled:1, applicants:[
+        { id:"APP-001", name:"陳大文", phone:"+852 9123 4567", age:28, gender:"男", education:"高級文憑", appStatus:"已錄用" },
+        { id:"APP-002", name:"李小明", phone:"+852 6234 5678", age:22, gender:"男", education:"副學士",   appStatus:"待審核" },
+      ]},
+      { siteId:"S003", siteName:"尖沙咀分店", district:"尖沙咀", address:"香港九龍尖沙咀廣東道 17 號", shiftName:"標準兼職班", wage:"HK$ 65/h", mealBreak:false, regularCount:1, backupCount:1, regularFilled:0, applicants:[
+        { id:"APP-003", name:"張美儀", phone:"+852 5345 6789", age:25, gender:"女", education:"中學",   appStatus:"待審核" },
+        { id:"APP-004", name:"王志豪", phone:"+852 9456 7890", age:31, gender:"男", education:"學士",   appStatus:"待審核" },
+      ]},
     ],
   },
   {
@@ -246,10 +272,75 @@ const TAB_LABELS: { key: FilterTab; label: string }[] = [
 // ── Detail Drawer ──────────────────────────────────────────
 const inputCls = "w-full text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
+// ── Site panel (expandable per-site breakdown) ────────────
+function SitePanel({ site, index, navigate, jobId }: { site: SiteConfig; index: number; navigate: (p: string) => void; jobId: string }) {
+  const [open, setOpen] = useState(false);
+  const remaining = site.regularCount - site.regularFilled;
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left">
+        <div className="flex items-center gap-3">
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold shrink-0">{index+1}</span>
+          <div>
+            <div className="text-sm font-semibold text-slate-900">{site.siteName} · {site.district}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{site.shiftName} · {site.wage}{site.mealBreak?" · 有飯鐘":" · 無飯鐘"}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <span>正式 {site.regularCount} / 候補 {site.backupCount}</span>
+            <span className={remaining === 0 ? "text-teal-600 font-medium" : "text-amber-600 font-medium"}>剩 {remaining}</span>
+            <span>申請 {site.applicants.length}</span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open?"rotate-180":""}`} />
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 py-4 space-y-3">
+          <div className="flex items-start gap-1.5 text-xs text-slate-500">
+            <MapPin className="w-3 h-3 shrink-0 mt-0.5" />{site.address}
+          </div>
+          {site.applicants.length === 0 ? (
+            <div className="text-center py-4 text-xs text-slate-400">此網點暫無申請記錄</div>
+          ) : (
+            <div className="space-y-2">
+              {site.applicants.map(a => (
+                <div key={a.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-semibold shrink-0">{a.name[0]}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900">{a.name}</span>
+                      <span className="text-xs text-slate-400">{a.age} 歲</span>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1"><Phone className="w-3 h-3" />{a.phone}</div>
+                  </div>
+                  {a.appStatus === "待審核" ? (
+                    <button onClick={() => navigate(`/talent?applicant=${a.id}`)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors shrink-0">
+                      <ClipboardCheck className="w-3 h-3" />去審核
+                    </button>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded-full border text-xs font-medium shrink-0 ${APP_STATUS_COLORS[a.appStatus]}`}>{a.appStatus}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => void; onSave: (updated: Job) => void }) {
   const navigate = useNavigate();
   const isUnpublished = job.status === "unpublished";
-  const remaining = job.headcount - job.filled;
+  // Aggregate across sites if multi-site job
+  const totalRegular  = job.sites ? job.sites.reduce((s, x) => s + x.regularCount, 0) : job.headcount;
+  const totalBackup   = job.sites ? job.sites.reduce((s, x) => s + x.backupCount, 0) : 0;
+  const totalFilled   = job.sites ? job.sites.reduce((s, x) => s + x.regularFilled, 0) : job.filled;
+  const totalApps     = job.sites ? job.sites.reduce((s, x) => s + x.applicants.length, 0) : job.applications;
+  const remaining = totalRegular - totalFilled;
   const normalApplicants = job.applicants.filter(a => a.appType !== "pool");
   const poolApplicants   = job.applicants.filter(a => a.appType === "pool");
   const [editing, setEditing] = useState(isUnpublished);
@@ -392,9 +483,10 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
           {/* Key metrics */}
           <div className={`px-6 py-4 grid gap-3 border-b border-slate-100 ${poolApplicants.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             {[
-              { label: "招募人數", value: `${editing ? draft.headcount : job.headcount} 人`, icon: <Users className="w-4 h-4 text-blue-500" /> },
+              { label: "正式招募", value: `${editing ? draft.headcount : totalRegular} 人`, icon: <Users className="w-4 h-4 text-blue-500" /> },
+              { label: "候補名額", value: `${editing ? 0 : totalBackup} 人`, icon: <Users className="w-4 h-4 text-violet-500" /> },
               { label: "剩餘名額", value: `${remaining} 人`, icon: <Users className="w-4 h-4 text-amber-500" />, highlight: remaining === 0 },
-              { label: "收到申請", value: `${normalApplicants.length} 人`, icon: <FileText className="w-4 h-4 text-green-500" /> },
+              { label: "收到申請", value: `${totalApps} 人`, icon: <FileText className="w-4 h-4 text-green-500" /> },
               ...(poolApplicants.length > 0 ? [{ label: "候選池", value: `${poolApplicants.length} 人`, icon: <Hourglass className="w-4 h-4 text-violet-500" />, isPool: true }] : []),
             ].map(m => (
               <div key={m.label} className={`rounded-xl p-3 text-center ${"isPool" in m && m.isPool ? "bg-violet-50 border border-violet-100" : "bg-slate-50"}`}>
@@ -458,22 +550,36 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                 </div>
               </div>
 
-              <div className="px-6 py-5 border-b border-slate-100">
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">門店資訊</div>
-                <div className="space-y-3">
-                  <Row label="門店名稱"><span className="text-sm text-slate-700">{job.store}</span></Row>
-                  <Row label="詳細地址">
-                    <div className="flex items-start gap-1.5 text-sm text-slate-700">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />{job.address}
-                    </div>
-                  </Row>
+              {/* Multi-site breakdown */}
+              {job.sites && job.sites.length > 0 ? (
+                <div className="px-6 py-5 border-b border-slate-100">
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">工作網點崗位</div>
+                  <div className="text-xs text-slate-400 mb-4">共 {job.sites.length} 個網點 · 正式 {totalRegular} 人 · 候補 {totalBackup} 人</div>
+                  <div className="space-y-3">
+                    {job.sites.map((site, si) => (
+                      <SitePanel key={site.siteId} site={site} index={si} navigate={navigate} jobId={job.id} />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="px-6 py-5 border-b border-slate-100">
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">門店資訊</div>
+                  <div className="space-y-3">
+                    <Row label="門店名稱"><span className="text-sm text-slate-700">{job.store}</span></Row>
+                    <Row label="詳細地址">
+                      <div className="flex items-start gap-1.5 text-sm text-slate-700">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />{job.address}
+                      </div>
+                    </Row>
+                  </div>
+                </div>
+              )}
 
               <div className="px-6 py-5 border-b border-slate-100">
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">招募詳情</div>
                 <div className="space-y-3">
-                  <Row label="招募人數"><span className="text-sm font-semibold text-slate-900">{job.headcount} 人</span></Row>
+                  <Row label="正式員工"><span className="text-sm font-semibold text-slate-900">{totalRegular} 人</span></Row>
+                  {totalBackup > 0 && <Row label="候補人員"><span className="text-sm font-semibold text-slate-900">{totalBackup} 人</span></Row>}
                   <Row label="薪酬範圍"><span className="text-sm font-semibold text-slate-900">{job.wage}</span></Row>
                   <Row label="職位有效期">
                     <div className="flex items-center gap-2 text-sm text-slate-700">
@@ -485,8 +591,8 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                 </div>
               </div>
 
-              {/* Applicants */}
-              <div className="px-6 py-5">
+              {/* Applicants (only shown for single-site jobs) */}
+              {!job.sites && <div className="px-6 py-5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">申請記錄</div>
                   <span className="text-xs text-slate-500">{normalApplicants.length} 位申請者</span>
@@ -588,7 +694,7 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                     </div>
                   </div>
                 )}
-              </div>
+              </div>}
             </>
           ) : (
             /* ── EDIT mode ── */
@@ -1223,9 +1329,12 @@ export function JobsPage() {
                       </tr>
                     ) : (
                       filtered.map((job, idx) => {
-                        const isSelectable = job.status !== "unpublished";
-                        const isSelected   = selected.has(job.id);
-                        const remaining    = job.headcount - job.filled;
+                        const isSelectable   = job.status !== "unpublished";
+                        const isSelected     = selected.has(job.id);
+                        const listRegular    = job.sites ? job.sites.reduce((s,x)=>s+x.regularCount,0) : job.headcount;
+                        const listFilled     = job.sites ? job.sites.reduce((s,x)=>s+x.regularFilled,0) : job.filled;
+                        const listApps       = job.sites ? job.sites.reduce((s,x)=>s+x.applicants.length,0) : job.applications;
+                        const remaining      = listRegular - listFilled;
                         return (
                           <tr
                             key={job.id}
@@ -1256,14 +1365,17 @@ export function JobsPage() {
                             <td className="px-4 py-4">
                               <div className="font-medium text-slate-900">{job.title}</div>
                             </td>
-                            <td className="px-4 py-4 text-sm text-slate-700">{job.store}</td>
+                            <td className="px-4 py-4">
+                              <div className="text-sm text-slate-700">{job.store}</div>
+                              {job.sites && job.sites.length > 1 && <div className="text-[10px] text-blue-500 mt-0.5 font-medium">{job.sites.length} 個網點</div>}
+                            </td>
                             <td className="px-4 py-4">
                               <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${HIRING_COLORS[job.hiringType]}`}>
                                 {HIRING_LABELS[job.hiringType]}
                               </span>
                             </td>
                             <td className="px-4 py-4 text-center">
-                              <span className="text-sm font-medium text-slate-900">{job.headcount}</span>
+                              <span className="text-sm font-medium text-slate-900">{listRegular}</span>
                               <span className="text-xs text-slate-400 ml-0.5">人</span>
                             </td>
                             <td className="px-4 py-4 text-center">
@@ -1276,7 +1388,7 @@ export function JobsPage() {
                               <div className="flex flex-col items-center gap-0.5">
                                 <div className="flex items-center justify-center gap-1 text-sm text-slate-600">
                                   <Users className="w-3.5 h-3.5 text-slate-400" />
-                                  <span className="font-medium">{job.applicants.filter(a => a.appType !== "pool").length || job.applications}</span>
+                                  <span className="font-medium">{listApps}</span>
                                 </div>
                                 {job.applicants.filter(a => a.appType === "pool").length > 0 && (
                                   <div className="flex items-center gap-0.5 text-[10px] text-violet-600 font-medium">

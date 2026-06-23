@@ -48,7 +48,7 @@ function MapPickerModal({ open, address, onConfirm, onClose }: {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] overflow-hidden flex flex-col">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div className="font-semibold text-slate-900">選擇門店地址</div>
+          <div className="font-semibold text-slate-900">選擇工作网点地址</div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-5 pt-4 pb-3">
@@ -145,10 +145,10 @@ function StoreFormModal({
         <DialogContent className="max-w-lg p-0 gap-0 flex flex-col" style={{ maxHeight: "90vh" }}>
           <div className="px-6 py-5 border-b border-slate-200 shrink-0 pr-14">
             <DialogTitle className="text-base font-semibold text-slate-900">
-              {isNew ? "新增門店" : "編輯門店"}
+              {isNew ? "新增工作网点" : "編輯工作网点"}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 mt-0.5">
-              填寫門店基本資料及工作地點
+              填寫工作网点基本資料及工作地點
             </DialogDescription>
           </div>
 
@@ -156,7 +156,7 @@ function StoreFormModal({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>門店名稱 <span className="text-red-500">*</span></Label>
+                <Label>工作网点名稱 <span className="text-red-500">*</span></Label>
                 <input className={inputCls} placeholder="例：旺角分店" value={name} onChange={e => setName(e.target.value)} />
               </div>
               <div className="space-y-1.5">
@@ -202,7 +202,7 @@ function StoreFormModal({
 
             {/* Store photo (optional) */}
             <div className="space-y-1.5">
-              <Label>門店照片 <span className="text-slate-400 text-xs font-normal">（選填）</span></Label>
+              <Label>工作网点照片 <span className="text-slate-400 text-xs font-normal">（選填）</span></Label>
               <div
                 onClick={() => document.getElementById("store-photo-input")?.click()}
                 className={`relative w-full h-36 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors overflow-hidden ${
@@ -213,7 +213,7 @@ function StoreFormModal({
               >
                 {photoPreview ? (
                   <>
-                    <img src={photoPreview} alt="門店照片" className="absolute inset-0 w-full h-full object-cover rounded-xl" />
+                    <img src={photoPreview} alt="工作网点照片" className="absolute inset-0 w-full h-full object-cover rounded-xl" />
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); setPhotoFile(null); }}
@@ -225,7 +225,7 @@ function StoreFormModal({
                 ) : (
                   <>
                     <ImageIcon className="w-7 h-7 text-slate-400 mb-1.5" />
-                    <span className="text-sm font-medium text-slate-600">點擊上傳門店照片</span>
+                    <span className="text-sm font-medium text-slate-600">點擊上傳工作网点照片</span>
                     <span className="text-xs text-slate-400 mt-0.5">PNG / JPG，建議橫向，最大 10MB</span>
                   </>
                 )}
@@ -300,8 +300,8 @@ export function StoresPage() {
         <header className="bg-white border-b border-slate-200 px-8 py-4 shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">門店管理</h1>
-              <p className="text-sm text-slate-500 mt-0.5">管理旗下所有門店資料及地址</p>
+              <h1 className="text-xl font-semibold text-slate-900">工作网点管理</h1>
+              <p className="text-sm text-slate-500 mt-0.5">管理旗下所有工作网点資料及地址</p>
             </div>
             <div className="flex items-center gap-3">
               <NotificationDropdown />
@@ -309,7 +309,7 @@ export function StoresPage() {
                 onClick={() => setFormTarget({})}
                 className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
               >
-                <Plus className="w-4 h-4" />新增門店
+                <Plus className="w-4 h-4" />新增工作网点
               </Button>
             </div>
           </div>
@@ -323,7 +323,7 @@ export function StoresPage() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="搜尋門店名稱、地區或地址…"
+                placeholder="搜尋工作网点名稱、地區或地址…"
                 className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {search && (
@@ -332,14 +332,14 @@ export function StoresPage() {
                 </button>
               )}
             </div>
-            <div className="text-sm text-slate-500">共 {stores.length} 間門店</div>
+            <div className="text-sm text-slate-500">共 {stores.length} 个工作网点</div>
           </div>
 
           {/* Store cards grid */}
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Store className="w-10 h-10 text-slate-300 mb-3" />
-              <div className="text-sm">暫無符合條件的門店</div>
+              <div className="text-sm">暫無符合條件的工作网点</div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -432,13 +432,13 @@ export function StoresPage() {
               <Trash2 className="w-7 h-7 text-red-500" />
             </div>
             <DialogTitle className="text-lg font-semibold text-slate-900 mb-2">
-              確認刪除門店？
+              確認刪除工作网点？
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 leading-relaxed">
               即將刪除「<span className="font-medium text-slate-700">{deleteTarget?.name}</span>」，此操作無法復原。
               {deleteTarget && deleteTarget.activeJobs > 0 && (
                 <span className="block mt-2 text-amber-600 font-medium">
-                  ⚠ 該門店下有 {deleteTarget.activeJobs} 個活躍職位，刪除後相關職位將一併下架。
+                  ⚠ 該工作网点下有 {deleteTarget.activeJobs} 個活躍職位，刪除後相關職位將一併下架。
                 </span>
               )}
             </DialogDescription>

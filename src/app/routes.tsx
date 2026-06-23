@@ -4,12 +4,13 @@ import { DashboardPage } from "./pages/dashboard-page";
 import { CreateJobPage } from "./pages/create-job-page";
 import { JobsPage } from "./pages/jobs-page";
 import { TalentPage } from "./pages/talent-page";
-import { WorkRecordsPage } from "./pages/work-records-page";
 import { SchedulePage } from "./pages/schedule-page";
 import { JobTypesPage } from "./pages/job-types-page";
+import { ShiftTemplatesPage } from "./pages/shift-templates-page";
 import { EmployeesPage } from "./pages/employees-page";
 import { AttendancePage } from "./pages/attendance-page";
 import { EmployeeAttendancePage } from "./pages/employee-attendance-page";
+import { AttendanceApplicationsPage } from "./pages/attendance-applications-page";
 import { FinancePage } from "./pages/finance-page";
 import { StoresPage } from "./pages/stores-page";
 import { MerchantProfilePage } from "./pages/merchant-profile-page";
@@ -41,12 +42,12 @@ export const router = createMemoryRouter([
     Component: TalentPage,
   },
   {
-    path: "/work-records",
-    Component: WorkRecordsPage,
-  },
-  {
     path: "/job-types",
     Component: JobTypesPage,
+  },
+  {
+    path: "/shift-templates",
+    Component: ShiftTemplatesPage,
   },
   {
     path: "/employees",
@@ -63,6 +64,10 @@ export const router = createMemoryRouter([
   {
     path: "/attendance-employee",
     Component: EmployeeAttendancePage,
+  },
+  {
+    path: "/attendance-applications",
+    Component: AttendanceApplicationsPage,
   },
   {
     path: "/finance",
