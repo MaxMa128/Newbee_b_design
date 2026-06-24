@@ -248,7 +248,7 @@ function StoreFormModal({
               onClick={handleSave}
               className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40"
             >
-              {isNew ? "新增門店" : "儲存修改"}
+              {isNew ? "新增工作網點" : "儲存修改"}
             </Button>
           </div>
         </DialogContent>
@@ -300,7 +300,7 @@ export function StoresPage() {
         <header className="bg-white border-b border-slate-200 px-8 py-4 shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">工作网点管理</h1>
+              <h1 className="text-xl font-semibold text-slate-900">工作网点</h1>
               <p className="text-sm text-slate-500 mt-0.5">管理旗下所有工作网点資料及地址</p>
             </div>
             <div className="flex items-center gap-3">
@@ -317,23 +317,7 @@ export function StoresPage() {
 
         <main className="flex-1 p-8 overflow-auto">
           {/* Search */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="搜尋工作网点名稱、地區或地址…"
-                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {search && (
-                <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <div className="text-sm text-slate-500">共 {stores.length} 个工作网点</div>
-          </div>
+          
 
           {/* Store cards grid */}
           {filtered.length === 0 ? (

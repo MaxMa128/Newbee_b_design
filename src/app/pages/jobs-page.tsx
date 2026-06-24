@@ -5,7 +5,7 @@ import {
   MapPin, Users, X, AlertTriangle, CheckSquare,
   ChevronDown, Clock, Phone, Calendar, FileText,
   Award, Pencil, Save, ClipboardCheck, Store, MessageSquare,
-  UserCheck, Hourglass, Info, Search, Check,
+  UserCheck, Hourglass, Info, Search, Check, Trash2,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { Button } from "../components/ui/button";
@@ -43,6 +43,9 @@ interface SiteConfig {
   address: string;
   shiftName: string;
   wage: string;
+  wageMin?: number;      // fulltime: monthly min
+  wageMax?: number;      // fulltime: monthly max
+  overtimeWage?: string; // part-time/temp: overtime per hour
   mealBreak: boolean;
   regularCount: number;
   backupCount: number;
@@ -92,6 +95,10 @@ const MOCK_STORES = [
   { id: "S008", name: "沙田分店",   district: "沙田",   address: "香港新界沙田新城市廣場 1 期 5 樓" },
 ];
 
+const MOCK_SHIFTS_LIST = [
+  "標準兼職班（週一至週五）","週末班次","全週晚班","彈性三天班","週末促銷班",
+];
+
 const CERT_SUGGESTIONS = [
   "電工證", "食品衛生證", "急救證", "駕駛執照（私家車）",
   "駕駛執照（貨車）", "叉車操作證", "保安牌", "物業管理證",
@@ -126,11 +133,11 @@ const INITIAL_JOBS: Job[] = [
       { id: "APP-004", name: "王志豪", phone: "+852 9456 7890", age: 31, gender: "男", education: "學士",     appStatus: "待審核" },
     ],
     sites: [
-      { siteId:"S001", siteName:"旺角分店",   district:"旺角",   address:"香港九龍旺角彌敦道 608 號", shiftName:"標準兼職班", wage:"HK$ 65/h", mealBreak:true,  regularCount:2, backupCount:1, regularFilled:1, applicants:[
+      { siteId:"S001", siteName:"旺角分店",   district:"旺角",   address:"香港九龍旺角彌敦道 608 號", shiftName:"標準兼職班", wage:"HK$ 65/h", overtimeWage:"HK$ 80/h", mealBreak:true,  regularCount:2, backupCount:1, regularFilled:1, applicants:[
         { id:"APP-001", name:"陳大文", phone:"+852 9123 4567", age:28, gender:"男", education:"高級文憑", appStatus:"已錄用" },
         { id:"APP-002", name:"李小明", phone:"+852 6234 5678", age:22, gender:"男", education:"副學士",   appStatus:"待審核" },
       ]},
-      { siteId:"S003", siteName:"尖沙咀分店", district:"尖沙咀", address:"香港九龍尖沙咀廣東道 17 號", shiftName:"標準兼職班", wage:"HK$ 65/h", mealBreak:false, regularCount:1, backupCount:1, regularFilled:0, applicants:[
+      { siteId:"S003", siteName:"尖沙咀分店", district:"尖沙咀", address:"香港九龍尖沙咀廣東道 17 號", shiftName:"標準兼職班", wage:"HK$ 65/h", overtimeWage:"HK$ 80/h", mealBreak:false, regularCount:1, backupCount:1, regularFilled:0, applicants:[
         { id:"APP-003", name:"張美儀", phone:"+852 5345 6789", age:25, gender:"女", education:"中學",   appStatus:"待審核" },
         { id:"APP-004", name:"王志豪", phone:"+852 9456 7890", age:31, gender:"男", education:"學士",   appStatus:"待審核" },
       ]},
@@ -272,6 +279,218 @@ const TAB_LABELS: { key: FilterTab; label: string }[] = [
 // ── Detail Drawer ──────────────────────────────────────────
 const inputCls = "w-full text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
+// ── Editable site card (for edit mode) ────────────────────
+function EditableSiteCard({ site, hiringType, onUpdate, onRemove }: {
+  site: SiteConfig; hiringType: HiringType;
+  onUpdate: (s: SiteConfig) => void; onRemove: () => void;
+}) {
+  const isFulltime = hiringType === "fulltime";
+  const cls = "text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const Lbl = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="space-y-1"><div className="text-xs font-medium text-slate-600">{label}</div>{children}</div>
+  );
+  const wageMinNum = site.wageMin ?? 0;
+  const wageMaxNum = site.wageMax ?? 0;
+  const maxExceeds = isFulltime && wageMinNum > 0 && wageMaxNum > 0 && wageMaxNum > wageMinNum * 1.15;
+  const parseN = (s: string) => parseFloat(s.replace(/[^0-9.]/g, "")) || 0;
+
+  return (
+    <div className={`border rounded-xl p-4 space-y-3 ${maxExceeds ? "border-red-300 bg-red-50/20" : "border-slate-200 bg-white"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">{site.siteName} · {site.district}</div>
+          <div className="text-xs text-slate-400 mt-0.5 flex items-start gap-1"><MapPin className="w-3 h-3 shrink-0 mt-0.5" />{site.address}</div>
+        </div>
+        <button onClick={onRemove} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+      <Lbl label="班次">
+        <div className="relative">
+          <select value={site.shiftName} onChange={e => onUpdate({...site, shiftName: e.target.value})} className={`w-full ${cls} appearance-none cursor-pointer pr-8`}>
+            {MOCK_SHIFTS_LIST.map(s => <option key={s}>{s}</option>)}
+            <option value={site.shiftName}>{site.shiftName}</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-4 h-4 text-slate-400" />
+        </div>
+      </Lbl>
+      {isFulltime ? (
+        <Lbl label="月薪範圍 *">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                <input type="number" min={0} value={wageMinNum || ""} onChange={e => onUpdate({...site, wageMin: +e.target.value || 0})} className={`${cls} pl-10 w-full`} placeholder="最低月薪" /></div>
+              <span className="text-slate-400 shrink-0">–</span>
+              <div className="relative flex-1"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                <input type="number" min={0} value={wageMaxNum || ""} onChange={e => onUpdate({...site, wageMax: +e.target.value || 0})} className={`${cls} pl-10 w-full`} placeholder="最高月薪" /></div>
+              <span className="text-xs text-slate-400 shrink-0">/ 月</span>
+            </div>
+            {maxExceeds && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                最高月薪不能超過最低的 15%（上限 HK$ {Math.round(wageMinNum * 1.15).toLocaleString()}）
+              </p>
+            )}
+          </div>
+        </Lbl>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <Lbl label="時薪 *">
+            <div className="relative"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+              <input type="number" min={0} value={parseN(site.wage) || ""} onChange={e => onUpdate({...site, wage: e.target.value ? `HK$ ${e.target.value}/h` : ""})} className={`${cls} pl-10 w-full`} placeholder="時薪" /></div>
+          </Lbl>
+          <Lbl label="加班薪資（選填）">
+            <div className="relative"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+              <input type="number" min={0} value={site.overtimeWage ? parseN(site.overtimeWage) || "" : ""} onChange={e => onUpdate({...site, overtimeWage: e.target.value ? `HK$ ${e.target.value}/h` : undefined})} className={`${cls} pl-10 w-full`} placeholder="加班時薪" /></div>
+          </Lbl>
+        </div>
+      )}
+      <Lbl label="飯鐘">
+        <div className="flex gap-2">
+          {([{val:true,l:"有飯鐘"},{val:false,l:"無飯鐘"}]).map(opt => (
+            <button key={String(opt.val)} type="button" onClick={() => onUpdate({...site, mealBreak: opt.val})}
+              className={`flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all ${site.mealBreak === opt.val ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+              {opt.l}
+            </button>
+          ))}
+        </div>
+      </Lbl>
+      <Lbl label="招募人數 *">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-600 shrink-0">正式員工</span>
+            <input type="number" min={0} value={site.regularCount} onChange={e => onUpdate({...site, regularCount: +e.target.value||0})} className={`${cls} w-16 text-center`} />
+            <span className="text-xs text-slate-400">人</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-600 shrink-0">候補人員</span>
+            <input type="number" min={0} value={site.backupCount} onChange={e => onUpdate({...site, backupCount: +e.target.value||0})} className={`${cls} w-16 text-center`} />
+            <span className="text-xs text-slate-400">人</span>
+          </div>
+        </div>
+      </Lbl>
+    </div>
+  );
+}
+
+// ── Add site dialog ────────────────────────────────────────
+function AddSiteDialog({ hiringType, onClose, onAdd }: {
+  hiringType: HiringType; onClose: () => void; onAdd: (s: SiteConfig) => void;
+}) {
+  const isFulltime = hiringType === "fulltime";
+  const [storeId, setStoreId]     = useState("");
+  const [shiftName, setShiftName] = useState(MOCK_SHIFTS_LIST[0]);
+  const [wage, setWage]           = useState("");
+  const [wageMin, setWageMin]     = useState("");
+  const [wageMax, setWageMax]     = useState("");
+  const [overtimeWage, setOvertime] = useState("");
+  const [mealBreak, setMealBreak] = useState(true);
+  const [regular, setRegular]     = useState("");
+  const [backup, setBackup]       = useState("0");
+  const store = MOCK_STORES.find(s => s.id === storeId);
+  const cls = "text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const wMinN = parseFloat(wageMin)||0, wMaxN = parseFloat(wageMax)||0;
+  const maxExceeds = isFulltime && wMinN > 0 && wMaxN > wMinN * 1.15;
+  const canAdd = store && shiftName && regular && (isFulltime ? wageMin && wageMax && !maxExceeds : wage);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden max-h-[85vh] flex flex-col">
+        <div className="px-6 py-5 border-b border-slate-200 shrink-0">
+          <DialogTitle className="text-base font-semibold text-slate-900">新增工作網點</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500 mt-0.5">為此職位新增一個工作網點崗位</DialogDescription>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">選擇工作網點 <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <select value={storeId} onChange={e => setStoreId(e.target.value)} className={`w-full ${cls} appearance-none cursor-pointer pr-8`}>
+                <option value="">請選擇網點</option>
+                {MOCK_STORES.map(s => <option key={s.id} value={s.id}>{s.name} — {s.district}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-4 h-4 text-slate-400" />
+            </div>
+            {store && <div className="text-xs text-slate-400 flex items-start gap-1"><MapPin className="w-3 h-3 shrink-0 mt-0.5" />{store.address}</div>}
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">班次 <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <select value={shiftName} onChange={e => setShiftName(e.target.value)} className={`w-full ${cls} appearance-none cursor-pointer pr-8`}>
+                {MOCK_SHIFTS_LIST.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-4 h-4 text-slate-400" />
+            </div>
+          </div>
+          {isFulltime ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">月薪範圍 <span className="text-red-500">*</span></label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                  <input type="number" value={wageMin} onChange={e => setWageMin(e.target.value)} className={`${cls} pl-10`} placeholder="最低" /></div>
+                <span className="text-slate-400">–</span>
+                <div className="relative flex-1"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                  <input type="number" value={wageMax} onChange={e => setWageMax(e.target.value)} className={`${cls} pl-10`} placeholder="最高" /></div>
+                <span className="text-xs text-slate-400 shrink-0">/ 月</span>
+              </div>
+              {maxExceeds && <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />最高不超過最低的 15%（上限 HK$ {Math.round(wMinN*1.15).toLocaleString()}）</p>}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">時薪 <span className="text-red-500">*</span></label>
+                <div className="relative"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                  <input type="number" value={wage} onChange={e => setWage(e.target.value)} className={`${cls} pl-10`} placeholder="時薪" /></div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">加班薪資（選填）</label>
+                <div className="relative"><span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
+                  <input type="number" value={overtimeWage} onChange={e => setOvertime(e.target.value)} className={`${cls} pl-10`} placeholder="加班時薪" /></div>
+              </div>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">飯鐘</label>
+            <div className="flex gap-2">
+              {([{val:true,l:"有飯鐘"},{val:false,l:"無飯鐘"}]).map(opt => (
+                <button key={String(opt.val)} type="button" onClick={() => setMealBreak(opt.val)}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${mealBreak===opt.val?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">招募人數 <span className="text-red-500">*</span></label>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2"><span className="text-xs text-slate-600 shrink-0">正式員工</span><input type="number" min={0} value={regular} onChange={e => setRegular(e.target.value)} className={`${cls} w-16 text-center`} /><span className="text-xs text-slate-400">人</span></div>
+              <div className="flex items-center gap-2"><span className="text-xs text-slate-600 shrink-0">候補人員</span><input type="number" min={0} value={backup} onChange={e => setBackup(e.target.value)} className={`${cls} w-16 text-center`} /><span className="text-xs text-slate-400">人</span></div>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 flex gap-3 shrink-0">
+          <Button variant="outline" className="flex-1" onClick={onClose}>取消</Button>
+          <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={!canAdd}
+            onClick={() => {
+              if (!store) return;
+              onAdd({
+                siteId: `S-NEW-${Date.now()}`, siteName: store.name, district: store.district,
+                address: store.address, shiftName,
+                wage: isFulltime ? `HK$ ${wageMin}–${wageMax} / 月` : `HK$ ${wage}/h`,
+                wageMin: isFulltime ? +wageMin : undefined, wageMax: isFulltime ? +wageMax : undefined,
+                overtimeWage: !isFulltime && overtimeWage ? `HK$ ${overtimeWage}/h` : undefined,
+                mealBreak, regularCount: +regular||0, backupCount: +backup||0,
+                regularFilled: 0, applicants: [],
+              });
+              onClose();
+            }}>
+            新增網點
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Site panel (expandable per-site breakdown) ────────────
 function SitePanel({ site, index, navigate, jobId }: { site: SiteConfig; index: number; navigate: (p: string) => void; jobId: string }) {
   const [open, setOpen] = useState(false);
@@ -343,7 +562,29 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
   const remaining = totalRegular - totalFilled;
   const normalApplicants = job.applicants.filter(a => a.appType !== "pool");
   const poolApplicants   = job.applicants.filter(a => a.appType === "pool");
-  const [editing, setEditing] = useState(isUnpublished);
+  const [editing, setEditing]     = useState(isUnpublished);
+  // Convert legacy job fields to a SiteConfig when no explicit sites exist
+  const legacySite = (): SiteConfig => ({
+    siteId: `SITE-${job.id}`,
+    siteName: job.store,
+    district: job.district,
+    address: job.address,
+    shiftName: (job.workDays?.length && job.workStart && job.workEnd)
+      ? `${job.workDays.map(d => WEEKDAY_MAP[d]).join("、")} · ${job.workStart}–${job.workEnd}`
+      : (job.workStart && job.workEnd ? `${job.workStart}–${job.workEnd}` : "請設定班次"),
+    wage: job.wage,
+    wageMin: job.hiringType === "fulltime" ? job.wageMin : undefined,
+    wageMax: job.hiringType === "fulltime" ? job.wageMax : undefined,
+    overtimeWage: undefined,
+    mealBreak: true,
+    regularCount: job.headcount,
+    backupCount: 0,
+    regularFilled: job.filled,
+    applicants: job.applicants.filter(a => a.appType !== "pool"),
+  });
+  const initialSites = job.sites && job.sites.length > 0 ? job.sites : [legacySite()];
+  const [draftSites, setDraftSites] = useState<SiteConfig[]>(initialSites);
+  const [showAddSite, setShowAddSite] = useState(false);
   const [draft, setDraft] = useState<Job>(job);
   const [draftWageMin, setDraftWageMin] = useState(String(job.wageMin));
   const [draftWageMax, setDraftWageMax] = useState(String(job.wageMax));
@@ -417,6 +658,11 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
       wage: buildWageStr(wMin, wMax, draft.hiringType),
       expiryDate: addMonths(draft.postedAt, vMonths),
     };
+    // Include updated sites if present
+    if (draftSites.length > 0) {
+      saved.sites = draftSites;
+      saved.headcount = draftSites.reduce((s, x) => s + x.regularCount, 0);
+    }
     onSave(saved);
     setEditing(false);
   };
@@ -431,6 +677,7 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
     setDraftWageMax(String(job.wageMax));
     setDraftValidityMonths(job.validityMonths);
     setDraftValidityCustom("");
+    setDraftSites(job.sites && job.sites.length > 0 ? job.sites : [legacySite()]);
     setEditing(false);
   };
 
@@ -481,7 +728,7 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
         <div className="flex-1 overflow-y-auto">
 
           {/* Key metrics */}
-          <div className={`px-6 py-4 grid gap-3 border-b border-slate-100 ${poolApplicants.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
+          <div className={`px-6 py-4 grid gap-3 border-b border-slate-100 ${totalBackup > 0 || poolApplicants.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             {[
               { label: "正式招募", value: `${editing ? draft.headcount : totalRegular} 人`, icon: <Users className="w-4 h-4 text-blue-500" /> },
               { label: "候補名額", value: `${editing ? 0 : totalBackup} 人`, icon: <Users className="w-4 h-4 text-violet-500" /> },
@@ -527,28 +774,7 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                 </div>
               </div>
 
-              <div className="px-6 py-5 border-b border-slate-100">
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">工作時間</div>
-                <div className="space-y-3">
-                  {job.workDays && job.workDays.length > 0 && (
-                    <Row label="工作日">
-                      <div className="flex flex-wrap gap-1">
-                        {job.workDays.map(d => (
-                          <span key={d} className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs rounded-md font-medium">{WEEKDAY_MAP[d]}</span>
-                        ))}
-                      </div>
-                    </Row>
-                  )}
-                  {job.workStart && job.workEnd && (
-                    <Row label="工作時段">
-                      <div className="flex items-center gap-1.5 text-sm text-slate-700">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        {job.workStart} – {job.workEnd}
-                      </div>
-                    </Row>
-                  )}
-                </div>
-              </div>
+              
 
               {/* Multi-site breakdown */}
               {job.sites && job.sites.length > 0 ? (
@@ -563,9 +789,9 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                 </div>
               ) : (
                 <div className="px-6 py-5 border-b border-slate-100">
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">門店資訊</div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">工作網點資訊</div>
                   <div className="space-y-3">
-                    <Row label="門店名稱"><span className="text-sm text-slate-700">{job.store}</span></Row>
+                    <Row label="工作網點"><span className="text-sm text-slate-700">{job.store}</span></Row>
                     <Row label="詳細地址">
                       <div className="flex items-start gap-1.5 text-sm text-slate-700">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />{job.address}
@@ -700,114 +926,24 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
             /* ── EDIT mode ── */
             <div className="px-6 py-5 space-y-6">
 
-              {/* ① 職位基本資料 */}
+              {/* ① 職位基本資料 — 對應創建職位第一步 */}
               <EditSection index={1} title="職位基本資料">
                 <div className="space-y-4">
                   <EditField label="職位名稱">
                     <input className={inputCls} value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} />
                   </EditField>
                   <EditField label="招聘方式">
-                    <div className="grid grid-cols-3 gap-2">
-                      {([
-                        { value: "fulltime", label: "全職" },
-                        { value: "parttime", label: "兼職" },
-                        { value: "temporary", label: "臨時工" },
-                      ] as { value: HiringType; label: string }[]).map(opt => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setDraft(d => ({ ...d, hiringType: opt.value }))}
-                          className={`py-2 rounded-lg border text-sm font-medium transition-all ${
-                            draft.hiringType === opt.value
-                              ? "border-blue-500 bg-blue-50 text-blue-700"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex px-3 py-1.5 rounded-lg border text-sm font-medium ${HIRING_COLORS[draft.hiringType]}`}>
+                        {HIRING_LABELS[draft.hiringType]}
+                      </span>
+                      <span className="text-xs text-slate-400">（招聘方式不可修改）</span>
                     </div>
                   </EditField>
-                </div>
-              </EditSection>
-
-              {/* ② 工作時間 */}
-              <EditSection index={2} title="工作時間">
-                {draft.hiringType !== "temporary" ? (
-                  <div className="space-y-4">
-                    <EditField label="工作日">
-                      <div className="grid grid-cols-7 gap-1">
-                        {WEEKDAYS.map(day => (
-                          <button
-                            key={day.key}
-                            type="button"
-                            onClick={() => toggleDraftDay(day.key)}
-                            className={`py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                              (draft.workDays ?? []).includes(day.key)
-                                ? "border-blue-500 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                            }`}
-                          >
-                            {day.label}
-                          </button>
-                        ))}
-                      </div>
-                    </EditField>
-                    <div className="grid grid-cols-2 gap-3">
-                      <EditField label="上班時間">
-                        <input type="time" className={inputCls} value={draft.workStart ?? ""} onChange={e => setDraft(d => ({ ...d, workStart: e.target.value }))} />
-                      </EditField>
-                      <EditField label="下班時間">
-                        <input type="time" className={inputCls} value={draft.workEnd ?? ""} onChange={e => setDraft(d => ({ ...d, workEnd: e.target.value }))} />
-                      </EditField>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {draftShifts.map((shift, idx) => (
-                      <div key={shift.id} className="flex items-end gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                        <div className="flex-1 grid grid-cols-3 gap-2">
-                          <EditField label={`第 ${idx + 1} 日 — 日期`}>
-                            <input type="date" className={inputCls} value={shift.date} onChange={e => updateDraftShift(shift.id, "date", e.target.value)} />
-                          </EditField>
-                          <EditField label="上班時間">
-                            <input type="time" className={inputCls} value={shift.startTime} onChange={e => updateDraftShift(shift.id, "startTime", e.target.value)} />
-                          </EditField>
-                          <EditField label="下班時間">
-                            <input type="time" className={inputCls} value={shift.endTime} onChange={e => updateDraftShift(shift.id, "endTime", e.target.value)} />
-                          </EditField>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeDraftShift(shift.id)}
-                          disabled={draftShifts.length === 1}
-                          className="mb-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addDraftShift}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />新增工作日期
-                    </button>
-                  </div>
-                )}
-              </EditSection>
-
-              {/* ③ 職位詳情 */}
-              <EditSection index={3} title="職位詳情">
-                <div className="space-y-4">
                   <EditField label="工作種類">
                     <div className="relative">
-                      <select
-                        className={`${inputCls} appearance-none cursor-pointer pr-8`}
-                        value={draft.jobCategory}
-                        onChange={e => setDraft(d => ({ ...d, jobCategory: e.target.value }))}
-                      >
+                      <select className={`${inputCls} appearance-none cursor-pointer pr-8`} value={draft.jobCategory}
+                        onChange={e => setDraft(d => ({ ...d, jobCategory: e.target.value }))}>
                         <option value="">請選擇工作種類</option>
                         {JOB_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
@@ -815,12 +951,8 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                     </div>
                   </EditField>
                   <EditField label="工作要求">
-                    <textarea
-                      rows={4}
-                      className={`${inputCls} resize-none`}
-                      value={draft.jobDesc}
-                      onChange={e => setDraft(d => ({ ...d, jobDesc: e.target.value }))}
-                    />
+                    <textarea rows={4} className={`${inputCls} resize-none`} value={draft.jobDesc}
+                      onChange={e => setDraft(d => ({ ...d, jobDesc: e.target.value }))} />
                   </EditField>
                   <EditField label="技能 / 證書要求">
                     <div className="space-y-2">
@@ -828,210 +960,100 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                         <div className="flex flex-wrap gap-1.5">
                           {draftCerts.map(c => (
                             <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium">
-                              {c}
-                              <button type="button" onClick={() => removeDraftCert(c)} className="hover:text-blue-900">
-                                <X className="w-3 h-3" />
-                              </button>
+                              {c}<button type="button" onClick={() => removeDraftCert(c)} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
                             </span>
                           ))}
                         </div>
                       )}
                       <div className="flex gap-2">
-                        <input
-                          className={inputCls}
-                          placeholder="輸入證書名稱後按 Enter 或點擊新增"
-                          value={draftCertInput}
+                        <input className={inputCls} placeholder="輸入證書名稱後按 Enter" value={draftCertInput}
                           onChange={e => setDraftCertInput(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDraftCert(draftCertInput); } }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => addDraftCert(draftCertInput)}
-                          className="shrink-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDraftCert(draftCertInput); } }} />
+                        <button type="button" onClick={() => addDraftCert(draftCertInput)}
+                          className="shrink-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4" /></button>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {CERT_SUGGESTIONS.filter(s => !draftCerts.includes(s)).map(s => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => addDraftCert(s)}
-                            className="text-xs px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                          >
-                            + {s}
-                          </button>
-                        ))}
-                      </div>
+                      <div className="flex flex-wrap gap-1.5">{CERT_SUGGESTIONS.filter(s => !draftCerts.includes(s)).map(s => (
+                        <button key={s} type="button" onClick={() => addDraftCert(s)}
+                          className="text-xs px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50">+ {s}</button>
+                      ))}</div>
                     </div>
                   </EditField>
                 </div>
               </EditSection>
 
-              {/* ④ 選擇門店 */}
-              <EditSection index={4} title="選擇門店">
-                <div className="space-y-3">
-                  {draftSelectedStoreIds.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {draftSelectedStoreIds.map(id => {
-                        const s = MOCK_STORES.find(x => x.id === id);
-                        if (!s) return null;
-                        return (
-                          <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-lg font-medium">
-                            <Store className="w-3 h-3 shrink-0" />
-                            {s.name}
-                            <span className="text-blue-400">{s.district}</span>
-                            <button type="button" onClick={() => toggleDraftStore(id)} className="hover:text-blue-900 ml-0.5">
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div ref={storeDropdownRef} className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setStoreDropdownOpen(o => !o)}
-                      className={`w-full h-9 flex items-center gap-2 px-3 rounded-lg border text-sm transition-colors text-left ${
-                        storeDropdownOpen ? "border-blue-400 ring-[3px] ring-blue-500/20" : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className={draftSelectedStoreIds.length > 0 ? "text-slate-600 text-xs" : "text-slate-400 text-xs"}>
-                        {draftSelectedStoreIds.length > 0 ? `已選 ${draftSelectedStoreIds.length} 家門店，繼續新增` : "搜尋並選擇門店（可多選）"}
-                      </span>
-                      <ChevronDown className={`ml-auto w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${storeDropdownOpen ? "rotate-180" : ""}`} />
-                    </button>
-                    {storeDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
-                        <div className="p-2 border-b border-slate-100">
-                          <div className="relative">
-                            <Search className="absolute left-2.5 top-2 w-3 h-3 text-slate-400" />
-                            <input
-                              autoFocus
-                              value={draftStoreSearch}
-                              onChange={e => setDraftStoreSearch(e.target.value)}
-                              placeholder="輸入門店名稱或地區篩選…"
-                              className="w-full pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="max-h-44 overflow-y-auto">
-                          {filteredStores.length === 0 ? (
-                            <div className="py-4 text-center text-xs text-slate-400">找不到符合的門店</div>
-                          ) : filteredStores.map(s => {
-                            const sel = draftSelectedStoreIds.includes(s.id);
-                            return (
-                              <button
-                                key={s.id}
-                                type="button"
-                                onClick={() => toggleDraftStore(s.id)}
-                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${sel ? "bg-blue-50/60" : ""}`}
-                              >
-                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
-                                  {sel && <Check className="w-2.5 h-2.5 text-white" />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-medium text-slate-900">{s.name}</div>
-                                  <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                                    <span className="text-blue-600">{s.district}</span> · {s.address}
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {draftSelectedStoreIds.length === 0 && (
-                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 flex items-start gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                      請至少選擇一家門店
-                    </p>
-                  )}
-                </div>
-              </EditSection>
-
-              {/* ⑤ 招募詳情 */}
-              <EditSection index={5} title="招募詳情">
+              {/* ② 工作地點配置 — 可編輯各網點詳情 */}
+              <EditSection index={2} title="工作地點配置">
                 <div className="space-y-4">
-                  <EditField label="招募人數">
-                    <div className="relative w-36">
-                      <input
-                        type="number" min={1}
-                        className={inputCls}
-                        value={draft.headcount}
-                        onChange={e => setDraft(d => ({ ...d, headcount: Number(e.target.value) || d.headcount }))}
-                      />
-                      <span className="absolute right-3 top-2 text-sm text-slate-400 pointer-events-none">人</span>
+                  {draftSites.length > 0 ? (
+                    <div className="space-y-3">
+                      {draftSites.map((site, idx) => (
+                        <EditableSiteCard
+                          key={site.siteId + idx}
+                          site={site}
+                          hiringType={draft.hiringType}
+                          onUpdate={updated => setDraftSites(prev => prev.map((s, i) => i === idx ? updated : s))}
+                          onRemove={() => setDraftSites(prev => prev.filter((_, i) => i !== idx))}
+                        />
+                      ))}
+                      <button type="button" onClick={() => setShowAddSite(true)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-colors">
+                        <Plus className="w-4 h-4" />新增工作網點
+                      </button>
                     </div>
-                  </EditField>
-                  <EditField label={draft.hiringType === "fulltime" ? "每月薪酬範圍" : "每小時薪酬範圍"}>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
-                          <input type="number" min={0} className={`${inputCls} pl-9 text-xs`} placeholder="最低" value={draftWageMin} onChange={e => setDraftWageMin(e.target.value)} />
+                  ) : (
+                    <div className="space-y-4">
+                      <EditField label="工作網點">
+                        <div className="relative">
+                          <select value={draftSelectedStoreIds[0] ?? ""} onChange={e => setDraftSelectedStoreIds(e.target.value ? [e.target.value] : [])} className={`w-full ${inputCls} appearance-none cursor-pointer pr-8`}>
+                            <option value="">請選擇工作網點</option>
+                            {MOCK_STORES.map(s => <option key={s.id} value={s.id}>{s.name} — {s.district}</option>)}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-4 h-4 text-slate-400" />
                         </div>
-                        <span className="text-slate-400 text-sm shrink-0">–</span>
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-2 text-xs text-slate-400 pointer-events-none">HK$</span>
-                          <input type="number" min={0} className={`${inputCls} pl-9 text-xs`} placeholder="最高" value={draftWageMax} onChange={e => setDraftWageMax(e.target.value)} />
-                        </div>
-                        <span className="text-xs text-slate-500 shrink-0 w-12">{draft.hiringType === "fulltime" ? "/ 月" : "/ 小時"}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 flex items-start gap-1.5">
-                        <Info className="w-3 h-3 shrink-0 mt-0.5" />若最低與最高相同，只顯示單一數字。
-                      </p>
-                    </div>
-                  </EditField>
-                  <EditField label="職位有效期">
-                    <div className="space-y-2.5">
-                      <div className="flex flex-wrap gap-1.5">
-                        {VALIDITY_OPTIONS.map(m => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => { setDraftValidityMonths(m); setDraftValidityCustom(""); }}
-                            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                              draftValidityMonths === m && !draftValidityCustom
-                                ? "border-blue-500 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                            }`}
-                          >
-                            {m} 個月
-                          </button>
-                        ))}
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-slate-500">自訂</span>
-                          <div className="relative">
-                            <input
-                              type="number" min={1} max={12} placeholder="月數"
-                              value={draftValidityCustom}
-                              onChange={e => { const v = e.target.value; if (v === "" || (Number(v) >= 1 && Number(v) <= 12)) setDraftValidityCustom(v); }}
-                              className={`${inputCls} w-16 pr-6`}
-                            />
-                            <span className="absolute right-2 top-2 text-xs text-slate-400 pointer-events-none">月</span>
+                      </EditField>
+                      {draft.hiringType !== "temporary" ? (
+                        <div className="space-y-4">
+                          <EditField label="工作日">
+                            <div className="grid grid-cols-7 gap-1">
+                              {WEEKDAYS.map(day => (
+                                <button key={day.key} type="button" onClick={() => toggleDraftDay(day.key)}
+                                  className={`py-1.5 rounded-lg border text-xs font-medium transition-all ${(draft.workDays ?? []).includes(day.key) ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                                  {day.label}
+                                </button>
+                              ))}
+                            </div>
+                          </EditField>
+                          <div className="grid grid-cols-2 gap-3">
+                            <EditField label="上班時間"><input type="time" className={inputCls} value={draft.workStart ?? ""} onChange={e => setDraft(d => ({ ...d, workStart: e.target.value }))} /></EditField>
+                            <EditField label="下班時間"><input type="time" className={inputCls} value={draft.workEnd ?? ""} onChange={e => setDraft(d => ({ ...d, workEnd: e.target.value }))} /></EditField>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
-                        <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                        <span className="text-xs text-slate-600">
-                          預計截止日期：<span className="font-semibold text-slate-900 ml-1">{expiryPreview}</span>
-                        </span>
-                        <span className="text-xs text-slate-400 ml-1">（{effectiveValidity} 個月後）</span>
-                      </div>
-                      <p className="text-xs text-slate-400 flex items-start gap-1.5">
-                        <Info className="w-3 h-3 shrink-0 mt-0.5" />有效期最長不超過 12 個月，到期後職位自動下架。
-                      </p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {draftShifts.map((shift, idx) => (
+                            <div key={shift.id} className="flex items-end gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                              <div className="flex-1 grid grid-cols-3 gap-2">
+                                <EditField label={`第 ${idx + 1} 日`}><input type="date" className={inputCls} value={shift.date} onChange={e => updateDraftShift(shift.id, "date", e.target.value)} /></EditField>
+                                <EditField label="上班時間"><input type="time" className={inputCls} value={shift.startTime} onChange={e => updateDraftShift(shift.id, "startTime", e.target.value)} /></EditField>
+                                <EditField label="下班時間"><input type="time" className={inputCls} value={shift.endTime} onChange={e => updateDraftShift(shift.id, "endTime", e.target.value)} /></EditField>
+                              </div>
+                              <button type="button" onClick={() => removeDraftShift(shift.id)} disabled={draftShifts.length === 1}
+                                className="mb-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          <button type="button" onClick={addDraftShift}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-colors">
+                            <Plus className="w-3.5 h-3.5" />新增工作日期
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </EditField>
+                  )}
                 </div>
               </EditSection>
+
 
             </div>
           )}
@@ -1094,6 +1116,14 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
           )}
         </div>
       </div>
+
+      {showAddSite && (
+        <AddSiteDialog
+          hiringType={draft.hiringType}
+          onClose={() => setShowAddSite(false)}
+          onAdd={site => { setDraftSites(prev => [...prev, site]); setShowAddSite(false); }}
+        />
+      )}
     </>
   );
 }
@@ -1142,8 +1172,9 @@ export function JobsPage() {
   const [storeFilter, setStoreFilter] = useState<string>(searchParams.get("store") ?? "all");
   const [bulkMode, setBulkMode]       = useState(false);
   const [selected, setSelected]       = useState<Set<string>>(new Set());
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [detailJob, setDetailJob]     = useState<Job | null>(null);
+  const [showConfirm, setShowConfirm]           = useState(false);
+  const [pendingUnpublishId, setPendingUnpublishId] = useState<string | null>(null);
+  const [detailJob, setDetailJob]               = useState<Job | null>(null);
 
   const allStores = Array.from(new Set(jobs.map(j => j.store))).sort();
 
@@ -1170,9 +1201,14 @@ export function JobsPage() {
   const exitBulkMode  = () => { setBulkMode(false); setSelected(new Set()); };
 
   const confirmUnpublish = () => {
-    setJobs(prev => prev.map(j => selected.has(j.id) ? { ...j, status: "unpublished" } : j));
+    if (pendingUnpublishId) {
+      setJobs(prev => prev.map(j => j.id === pendingUnpublishId ? { ...j, status: "unpublished" } : j));
+      setPendingUnpublishId(null);
+    } else {
+      setJobs(prev => prev.map(j => selected.has(j.id) ? { ...j, status: "unpublished" } : j));
+      exitBulkMode();
+    }
     setShowConfirm(false);
-    exitBulkMode();
   };
 
   return (
@@ -1223,7 +1259,7 @@ export function JobsPage() {
                     onChange={e => setStoreFilter(e.target.value)}
                     className="h-8 pl-3 pr-8 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
                   >
-                    <option value="all">全部門店</option>
+                    <option value="all">全部工作網點</option>
                     {allStores.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-2 w-4 h-4 text-slate-400" />
@@ -1273,7 +1309,7 @@ export function JobsPage() {
             {/* Active store filter indicator */}
             {storeFilter !== "all" && (
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs text-slate-500">篩選門店：</span>
+                <span className="text-xs text-slate-500">篩選工作網點：</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium">
                   {storeFilter}
                   <button onClick={() => setStoreFilter("all")} className="hover:text-blue-900 ml-0.5">
@@ -1304,10 +1340,11 @@ export function JobsPage() {
                       )}
                       <th className="px-4 py-3 text-left w-[96px]">職位 ID</th>
                       <th className="px-4 py-3 text-left w-[130px]">職位名稱</th>
-                      <th className="px-4 py-3 text-left w-[110px]">門店</th>
+                      <th className="px-4 py-3 text-left w-[110px]">工作网点</th>
                       <th className="px-4 py-3 text-left w-[80px]">招聘方式</th>
-                      <th className="px-4 py-3 text-center w-[60px]">招募</th>
-                      <th className="px-4 py-3 text-center w-[60px]">剩餘</th>
+                      <th className="px-4 py-3 text-center w-[65px]">招聘人数</th>
+                      <th className="px-4 py-3 text-center w-[65px]">正式剩餘</th>
+                      <th className="px-4 py-3 text-center w-[65px]">候補剩餘</th>
                       <th className="px-4 py-3 text-center w-[68px]">申請</th>
                       <th className="px-4 py-3 text-left w-[96px]">狀態</th>
                       <th className="px-4 py-3 text-left w-[100px]">發佈時間</th>
@@ -1320,7 +1357,7 @@ export function JobsPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={bulkMode ? 12 : 11} className="py-16 text-center">
+                        <td colSpan={bulkMode ? 13 : 12} className="py-16 text-center">
                           <div className="flex flex-col items-center gap-2 text-slate-400">
                             <Briefcase className="w-8 h-8 text-slate-300" />
                             <span className="text-sm">此分類下暫無職位</span>
@@ -1375,13 +1412,26 @@ export function JobsPage() {
                               </span>
                             </td>
                             <td className="px-4 py-4 text-center">
-                              <span className="text-sm font-medium text-slate-900">{listRegular}</span>
-                              <span className="text-xs text-slate-400 ml-0.5">人</span>
+                              <div>
+                                <span className="text-sm font-medium text-slate-900">{listRegular}</span>
+                                <span className="text-xs text-slate-400 ml-0.5">人</span>
+                              </div>
+                              {job.sites && job.sites.reduce((s,x)=>s+x.backupCount,0) > 0 && (
+                                <div className="text-[10px] text-violet-600 font-medium mt-0.5">+{job.sites.reduce((s,x)=>s+x.backupCount,0)} 候補</div>
+                              )}
                             </td>
                             <td className="px-4 py-4 text-center">
                               <span className={`text-sm font-semibold ${remaining === 0 ? "text-teal-600" : remaining <= 1 ? "text-amber-600" : "text-slate-900"}`}>
                                 {remaining}
                               </span>
+                              <span className="text-xs text-slate-400 ml-0.5">人</span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {job.sites ? (
+                                <span className={`text-sm font-semibold ${job.sites.reduce((s,x)=>s+(x.backupCount-Math.max(0,x.backupCount-(x.regularCount-x.regularFilled<0?0:0))),0) === 0 ? "text-slate-300" : "text-violet-600"}`}>
+                                  {job.sites.reduce((s,x)=>s+x.backupCount,0)}
+                                </span>
+                              ) : <span className="text-sm text-slate-300">—</span>}
                               <span className="text-xs text-slate-400 ml-0.5">人</span>
                             </td>
                             <td className="px-4 py-4 text-center">
@@ -1429,12 +1479,20 @@ export function JobsPage() {
                                   編輯並重新發佈
                                 </button>
                               ) : (
-                                <button
-                                  onClick={() => setDetailJob(job)}
-                                  className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors whitespace-nowrap"
-                                >
-                                  管理
-                                </button>
+                                <div className="flex items-center gap-2.5">
+                                  <button
+                                    onClick={() => setDetailJob(job)}
+                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors whitespace-nowrap"
+                                  >
+                                    管理
+                                  </button>
+                                  <button
+                                    onClick={() => { setPendingUnpublishId(job.id); setShowConfirm(true); }}
+                                    className="text-xs text-red-500 hover:text-red-600 font-medium transition-colors whitespace-nowrap"
+                                  >
+                                    下架
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -1466,14 +1524,16 @@ export function JobsPage() {
       )}
 
       {/* ── Bulk confirm dialog ── */}
-      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+      <Dialog open={showConfirm} onOpenChange={v => { setShowConfirm(v); if (!v) setPendingUnpublishId(null); }}>
         <DialogContent className="max-w-sm">
           <div className="flex flex-col items-center text-center pt-2 pb-1">
             <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mb-4">
               <AlertTriangle className="w-7 h-7 text-red-500" />
             </div>
             <DialogTitle className="text-lg font-semibold text-slate-900 mb-2">
-              確認下架 {selected.size} 個職位？
+              {pendingUnpublishId
+                ? `確認下架「${jobs.find(j => j.id === pendingUnpublishId)?.title ?? ""}」？`
+                : `確認下架 ${selected.size} 個職位？`}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 leading-relaxed">
               下架後職位將停止接受申請，求職者無法再搜尋到這些職位。

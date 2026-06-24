@@ -147,7 +147,7 @@ export function Sidebar({ showSupportCard, onContactSupport }: SidebarProps) {
                 <NavItem
                   navPath="/stores"
                   icon={<Store className="w-4 h-4" />}
-                  label="工作网点管理"
+                  label="工作网点"
                   indent
                 />
                 <NavItem

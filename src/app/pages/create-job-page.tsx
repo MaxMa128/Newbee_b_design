@@ -20,6 +20,7 @@ interface SiteEntry {
   shiftId: string;
   tempDates: TempDateSlot[];
   wage: string;
+  wageMax: string;
   overtimeWage: string;
   mealBreak: boolean;
   regularCount: string;
@@ -30,6 +31,7 @@ interface LocationConfig {
   shiftId: string;
   tempDates: TempDateSlot[];
   wage: string;
+  wageMax: string;
   overtimeWage: string;
   mealBreak: boolean;
   regularCount: string;
@@ -286,8 +288,16 @@ function ConfigForm({ value, onChange, shifts, onAddShift, hiringType }: {
 }) {
   const set = (k: keyof LocationConfig, v: LocationConfig[keyof LocationConfig]) => onChange({ ...value, [k]: v });
   const cls = "text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500";
-  const isTemp = hiringType === "temporary";
-  const unit = hiringType === "fulltime" ? "/ 月" : "/ 小時";
+  const isTemp     = hiringType === "temporary";
+  const isFulltime = hiringType === "fulltime";
+  const unit = isFulltime ? "/ 月" : "/ 小時";
+
+  // 15% range validation for fulltime
+  const wageMin = parseFloat(value.wage) || 0;
+  const wageMaxV = parseFloat(value.wageMax) || 0;
+  const rangeExceeded = isFulltime && wageMin > 0 && wageMaxV > 0 && wageMaxV > wageMin
+    && (wageMaxV - wageMin) / wageMin > 0.15;
+  const rangeInvalid = isFulltime && wageMin > 0 && wageMaxV > 0 && wageMaxV < wageMin;
 
   return (
     <div className="space-y-4">
@@ -310,25 +320,50 @@ function ConfigForm({ value, onChange, shifts, onAddShift, hiringType }: {
         </div>
       )}
 
-      {/* Wage */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-600">薪資 <span className="text-red-500">*</span></label>
-          <div className="relative">
-            <span className="absolute left-3 top-2 text-sm text-slate-400 pointer-events-none">HK$</span>
-            <input type="number" min={0} value={value.wage} onChange={e => set("wage", e.target.value)} placeholder="薪資" className={`${cls} pl-10 w-full`} />
+      {/* Wage — fulltime: range; others: single + overtime */}
+      {isFulltime ? (
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-slate-600">月薪範圍 <span className="text-red-500">*</span></label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-2 text-sm text-slate-400 pointer-events-none">HK$</span>
+              <input type="number" min={0} value={value.wage} onChange={e => set("wage", e.target.value)}
+                placeholder="最低月薪" className={`${cls} pl-10 w-full ${rangeExceeded || rangeInvalid ? "border-red-300 focus:ring-red-400" : ""}`} />
+            </div>
+            <span className="text-slate-400 text-sm shrink-0">–</span>
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-2 text-sm text-slate-400 pointer-events-none">HK$</span>
+              <input type="number" min={0} value={value.wageMax} onChange={e => set("wageMax", e.target.value)}
+                placeholder="最高月薪" className={`${cls} pl-10 w-full ${rangeExceeded || rangeInvalid ? "border-red-300 focus:ring-red-400" : ""}`} />
+            </div>
+            <span className="text-[10px] text-slate-400 shrink-0">/ 月</span>
           </div>
-          <span className="text-[10px] text-slate-400">{unit}</span>
+          {rangeInvalid && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />最高月薪不能低於最低月薪</p>}
+          {rangeExceeded && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />薪酬範圍差距不能超過 15%（目前差距 {Math.round((wageMaxV - wageMin) / wageMin * 100)}%）</p>}
+          {!rangeInvalid && !rangeExceeded && wageMin > 0 && wageMaxV > 0 && (
+            <p className="text-xs text-green-600">差距 {Math.round((wageMaxV - wageMin) / wageMin * 100)}%，符合規定 ✓</p>
+          )}
         </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-600">加班薪資 <span className="text-slate-400 font-normal">（選填）</span></label>
-          <div className="relative">
-            <span className="absolute left-3 top-2 text-sm text-slate-400 pointer-events-none">HK$</span>
-            <input type="number" min={0} value={value.overtimeWage} onChange={e => set("overtimeWage", e.target.value)} placeholder="加班薪資" className={`${cls} pl-10 w-full`} />
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">薪資 <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-sm text-slate-400 pointer-events-none">HK$</span>
+              <input type="number" min={0} value={value.wage} onChange={e => set("wage", e.target.value)} placeholder="薪資" className={`${cls} pl-10 w-full`} />
+            </div>
+            <span className="text-[10px] text-slate-400">{unit}</span>
           </div>
-          <span className="text-[10px] text-slate-400">{unit}</span>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">加班薪資 <span className="text-slate-400 font-normal">（選填）</span></label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-sm text-slate-400 pointer-events-none">HK$</span>
+              <input type="number" min={0} value={value.overtimeWage} onChange={e => set("overtimeWage", e.target.value)} placeholder="加班薪資" className={`${cls} pl-10 w-full`} />
+            </div>
+            <span className="text-[10px] text-slate-400">{unit}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Meal break */}
       <div className="space-y-1.5">
@@ -398,7 +433,7 @@ function SiteEntryCard({ entry, stores, shifts, index, onUpdate, onDuplicate, on
         <button onClick={onAddStore} className="flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium"><Plus className="w-3.5 h-3.5" />新增工作網點</button>
       </div>
       <ConfigForm
-        value={{ shiftId: entry.shiftId, tempDates: entry.tempDates, wage: entry.wage, overtimeWage: entry.overtimeWage, mealBreak: entry.mealBreak, regularCount: entry.regularCount, backupCount: entry.backupCount }}
+        value={{ shiftId: entry.shiftId, tempDates: entry.tempDates, wage: entry.wage, wageMax: entry.wageMax, overtimeWage: entry.overtimeWage, mealBreak: entry.mealBreak, regularCount: entry.regularCount, backupCount: entry.backupCount }}
         onChange={v => onUpdate({ ...entry, ...v })}
         shifts={shifts} onAddShift={onAddShift} hiringType={hiringType}
       />
@@ -426,8 +461,8 @@ function StepIndicator({ current }: { current: 1 | 2 }) {
 }
 
 // ── Main page ──────────────────────────────────────────────
-const defaultLocConfig = (): LocationConfig => ({ shiftId: "", tempDates: [emptyTempDate()], wage: "", overtimeWage: "", mealBreak: true, regularCount: "", backupCount: "" });
-const defaultSiteEntry = (): SiteEntry => ({ id: Date.now().toString(), storeId: "", shiftId: "", tempDates: [emptyTempDate()], wage: "", overtimeWage: "", mealBreak: true, regularCount: "", backupCount: "" });
+const defaultLocConfig = (): LocationConfig => ({ shiftId: "", tempDates: [emptyTempDate()], wage: "", wageMax: "", overtimeWage: "", mealBreak: true, regularCount: "", backupCount: "" });
+const defaultSiteEntry = (): SiteEntry => ({ id: Date.now().toString(), storeId: "", shiftId: "", tempDates: [emptyTempDate()], wage: "", wageMax: "", overtimeWage: "", mealBreak: true, regularCount: "", backupCount: "" });
 
 export function CreateJobPage() {
   const navigate = useNavigate();
@@ -479,7 +514,7 @@ export function CreateJobPage() {
     return baseOk && c.shiftId;
   };
   const step2Valid = (() => {
-    if (locationMode === "site") return siteEntries.every(e => e.storeId && configValid({ shiftId: e.shiftId, tempDates: e.tempDates, wage: e.wage, overtimeWage: e.overtimeWage, mealBreak: e.mealBreak, regularCount: e.regularCount, backupCount: e.backupCount }));
+    if (locationMode === "site") return siteEntries.every(e => e.storeId && configValid({ shiftId: e.shiftId, tempDates: e.tempDates, wage: e.wage, wageMax: e.wageMax, overtimeWage: e.overtimeWage, mealBreak: e.mealBreak, regularCount: e.regularCount, backupCount: e.backupCount }));
     if (locationMode === "fixed") return fixedAddress.trim() && configValid(locConfig);
     return configValid(locConfig);
   })();
