@@ -47,6 +47,7 @@ interface SiteConfig {
   wageMax?: number;      // fulltime: monthly max
   overtimeWage?: string; // part-time/temp: overtime per hour
   mealBreak: boolean;
+  shuttleBus?: boolean;
   regularCount: number;
   backupCount: number;
   regularFilled: number;
@@ -64,6 +65,7 @@ interface Job {
   wageMin: number;
   wageMax: number;
   validityMonths: number;
+  payPeriod?: "daily" | "weekly" | "monthly";
   headcount: number;
   filled: number;
   applications: number;
@@ -133,11 +135,11 @@ const INITIAL_JOBS: Job[] = [
       { id: "APP-004", name: "王志豪", phone: "+852 9456 7890", age: 31, gender: "男", education: "學士",     appStatus: "待審核" },
     ],
     sites: [
-      { siteId:"S001", siteName:"旺角分店",   district:"旺角",   address:"香港九龍旺角彌敦道 608 號", shiftName:"標準兼職班", wage:"HK$ 65/h", overtimeWage:"HK$ 80/h", mealBreak:true,  regularCount:2, backupCount:1, regularFilled:1, applicants:[
+      { siteId:"S001", siteName:"旺角分店",   district:"旺角",   address:"香港九龍旺角彌敦道 608 號", shiftName:"標準兼職班", wage:"HK$ 65/h", overtimeWage:"HK$ 80/h", mealBreak:true,  shuttleBus:true,  regularCount:2, backupCount:1, regularFilled:1, applicants:[
         { id:"APP-001", name:"陳大文", phone:"+852 9123 4567", age:28, gender:"男", education:"高級文憑", appStatus:"已錄用" },
         { id:"APP-002", name:"李小明", phone:"+852 6234 5678", age:22, gender:"男", education:"副學士",   appStatus:"待審核" },
       ]},
-      { siteId:"S003", siteName:"尖沙咀分店", district:"尖沙咀", address:"香港九龍尖沙咀廣東道 17 號", shiftName:"標準兼職班", wage:"HK$ 65/h", overtimeWage:"HK$ 80/h", mealBreak:false, regularCount:1, backupCount:1, regularFilled:0, applicants:[
+      { siteId:"S003", siteName:"尖沙咀分店", district:"尖沙咀", address:"香港九龍尖沙咀廣東道 17 號", shiftName:"標準兼職班", wage:"HK$ 65/h", overtimeWage:"HK$ 80/h", mealBreak:false, shuttleBus:false, regularCount:1, backupCount:1, regularFilled:0, applicants:[
         { id:"APP-003", name:"張美儀", phone:"+852 5345 6789", age:25, gender:"女", education:"中學",   appStatus:"待審核" },
         { id:"APP-004", name:"王志豪", phone:"+852 9456 7890", age:31, gender:"男", education:"學士",   appStatus:"待審核" },
       ]},
@@ -355,6 +357,16 @@ function EditableSiteCard({ site, hiringType, onUpdate, onRemove }: {
           ))}
         </div>
       </Lbl>
+      <Lbl label="直達班車">
+        <div className="flex gap-2">
+          {([{val:true,l:"有班車"},{val:false,l:"無班車"}]).map(opt => (
+            <button key={String(opt.val)} type="button" onClick={() => onUpdate({...site, shuttleBus: opt.val})}
+              className={`flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all ${site.shuttleBus === opt.val ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+              {opt.l}
+            </button>
+          ))}
+        </div>
+      </Lbl>
       <Lbl label="招募人數 *">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -385,6 +397,7 @@ function AddSiteDialog({ hiringType, onClose, onAdd }: {
   const [wageMax, setWageMax]     = useState("");
   const [overtimeWage, setOvertime] = useState("");
   const [mealBreak, setMealBreak] = useState(true);
+  const [shuttleBus, setShuttleBus] = useState(false);
   const [regular, setRegular]     = useState("");
   const [backup, setBackup]       = useState("0");
   const store = MOCK_STORES.find(s => s.id === storeId);
@@ -460,6 +473,17 @@ function AddSiteDialog({ hiringType, onClose, onAdd }: {
             </div>
           </div>
           <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600">直達班車</label>
+            <div className="flex gap-2">
+              {([{val:true,l:"有班車"},{val:false,l:"無班車"}]).map(opt => (
+                <button key={String(opt.val)} type="button" onClick={() => setShuttleBus(opt.val)}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${shuttleBus===opt.val?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-600">招募人數 <span className="text-red-500">*</span></label>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2"><span className="text-xs text-slate-600 shrink-0">正式員工</span><input type="number" min={0} value={regular} onChange={e => setRegular(e.target.value)} className={`${cls} w-16 text-center`} /><span className="text-xs text-slate-400">人</span></div>
@@ -478,7 +502,7 @@ function AddSiteDialog({ hiringType, onClose, onAdd }: {
                 wage: isFulltime ? `HK$ ${wageMin}–${wageMax} / 月` : `HK$ ${wage}/h`,
                 wageMin: isFulltime ? +wageMin : undefined, wageMax: isFulltime ? +wageMax : undefined,
                 overtimeWage: !isFulltime && overtimeWage ? `HK$ ${overtimeWage}/h` : undefined,
-                mealBreak, regularCount: +regular||0, backupCount: +backup||0,
+                mealBreak, shuttleBus, regularCount: +regular||0, backupCount: +backup||0,
                 regularFilled: 0, applicants: [],
               });
               onClose();
@@ -534,7 +558,7 @@ function SitePanel({ site, index, navigate, jobId }: { site: SiteConfig; index: 
                     <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1"><Phone className="w-3 h-3" />{a.phone}</div>
                   </div>
                   {a.appStatus === "待審核" ? (
-                    <button onClick={() => navigate(`/talent?applicant=${a.id}`)}
+                    <button onClick={() => navigate(`/talent?jobId=${jobId}&store=${encodeURIComponent(site.siteName)}`)}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors shrink-0">
                       <ClipboardCheck className="w-3 h-3" />去審核
                     </button>
@@ -728,21 +752,7 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
         <div className="flex-1 overflow-y-auto">
 
           {/* Key metrics */}
-          <div className={`px-6 py-4 grid gap-3 border-b border-slate-100 ${totalBackup > 0 || poolApplicants.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
-            {[
-              { label: "正式招募", value: `${editing ? draft.headcount : totalRegular} 人`, icon: <Users className="w-4 h-4 text-blue-500" /> },
-              { label: "候補名額", value: `${editing ? 0 : totalBackup} 人`, icon: <Users className="w-4 h-4 text-violet-500" /> },
-              { label: "剩餘名額", value: `${remaining} 人`, icon: <Users className="w-4 h-4 text-amber-500" />, highlight: remaining === 0 },
-              { label: "收到申請", value: `${totalApps} 人`, icon: <FileText className="w-4 h-4 text-green-500" /> },
-              ...(poolApplicants.length > 0 ? [{ label: "候選池", value: `${poolApplicants.length} 人`, icon: <Hourglass className="w-4 h-4 text-violet-500" />, isPool: true }] : []),
-            ].map(m => (
-              <div key={m.label} className={`rounded-xl p-3 text-center ${"isPool" in m && m.isPool ? "bg-violet-50 border border-violet-100" : "bg-slate-50"}`}>
-                <div className="flex items-center justify-center mb-1.5">{m.icon}</div>
-                <div className={`text-xl font-semibold ${"highlight" in m && m.highlight ? "text-teal-600" : "isPool" in m && m.isPool ? "text-violet-700" : "text-slate-900"}`}>{m.value}</div>
-                <div className={`text-xs mt-0.5 ${"isPool" in m && m.isPool ? "text-violet-500" : "text-slate-500"}`}>{m.label}</div>
-              </div>
-            ))}
-          </div>
+          
 
           {/* ── VIEW mode ── */}
           {!editing ? (
@@ -806,6 +816,11 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                 <div className="space-y-3">
                   <Row label="总正式員工"><span className="text-sm font-semibold text-slate-900">{totalRegular} 人</span></Row>
                   {totalBackup > 0 && <Row label="总候補人員"><span className="text-sm font-semibold text-slate-900">{totalBackup} 人</span></Row>}
+                  <Row label="結算周期">
+                    <span className="text-sm font-semibold text-slate-900">
+                      {{ daily: "日結", weekly: "週結", monthly: "月結" }[job.payPeriod ?? "monthly"] ?? "月結"}
+                    </span>
+                  </Row>
                   <Row label="職位有效期">
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <span>{job.validityMonths} 個月</span>
@@ -975,6 +990,17 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
                         <button key={s} type="button" onClick={() => addDraftCert(s)}
                           className="text-xs px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50">+ {s}</button>
                       ))}</div>
+                    </div>
+                  </EditField>
+                  <EditField label="結算周期">
+                    <div className="grid grid-cols-3 gap-2">
+                      {([["daily","日結"],["weekly","週結"],["monthly","月結"]] as const).map(([v, l]) => (
+                        <button key={v} type="button"
+                          onClick={() => setDraft(d => ({ ...d, payPeriod: v }))}
+                          className={`py-2 rounded-lg border text-sm font-medium transition-all ${(draft.payPeriod ?? "monthly") === v ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                          {l}
+                        </button>
+                      ))}
                     </div>
                   </EditField>
                 </div>

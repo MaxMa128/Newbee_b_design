@@ -985,12 +985,12 @@ export function TalentPage() {
   const [applicants, setApplicants] = useState<Applicant[]>(MOCK_APPLICANTS);
   const [activeTab, setActiveTab]   = useState<StatusFilter>("all");
   const [search, setSearch]         = useState("");
-  const [storeFilter, setStoreFilter]       = useState("all");
+  const [storeFilter, setStoreFilter]       = useState(() => searchParams.get("store") ?? "all");
   const [genderFilter, setGenderFilter]     = useState("all");
   const [educationFilter, setEducationFilter] = useState("all");
   const [ageMin, setAgeMin] = useState("");
   const [ageMax, setAgeMax] = useState("");
-  const [jobFilter, setJobFilter]           = useState("all");
+  const [jobFilter, setJobFilter]           = useState(() => searchParams.get("jobId") ?? "all");
   const [reviewTarget, setReviewTarget]   = useState<Applicant | null>(null);
   const [resumeTarget, setResumeTarget]   = useState<Applicant | null>(null);
   const [manageTarget, setManageTarget]   = useState<Applicant | null>(null);
