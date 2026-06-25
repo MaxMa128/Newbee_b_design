@@ -23,6 +23,7 @@ interface SiteEntry {
   wageMax: string;
   overtimeWage: string;
   mealBreak: boolean;
+  shuttleBus: boolean;
   regularCount: string;
   backupCount: string;
 }
@@ -34,6 +35,7 @@ interface LocationConfig {
   wageMax: string;
   overtimeWage: string;
   mealBreak: boolean;
+  shuttleBus: boolean;
   regularCount: string;
   backupCount: string;
 }
@@ -314,9 +316,7 @@ function ConfigForm({ value, onChange, shifts, onAddShift, hiringType }: {
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-2.5 w-4 h-4 text-slate-400" />
           </div>
-          <button onClick={onAddShift} className="flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium">
-            <Plus className="w-3.5 h-3.5" />新增班次模板
-          </button>
+          
         </div>
       )}
 
@@ -378,6 +378,19 @@ function ConfigForm({ value, onChange, shifts, onAddShift, hiringType }: {
         </div>
       </div>
 
+      {/* Shuttle bus */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-slate-600">直達班車</label>
+        <div className="flex gap-2">
+          {[{ val: true, label: "有班車" }, { val: false, label: "無班車" }].map(opt => (
+            <button key={String(opt.val)} type="button" onClick={() => set("shuttleBus", opt.val)}
+              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${value.shuttleBus === opt.val ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Headcount */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-slate-600">招募人數 <span className="text-red-500">*</span></label>
@@ -430,10 +443,10 @@ function SiteEntryCard({ entry, stores, shifts, index, onUpdate, onDuplicate, on
           <ChevronDown className="pointer-events-none absolute right-3 top-2.5 w-4 h-4 text-slate-400" />
         </div>
         {store && <div className="text-xs text-slate-400 flex items-start gap-1"><MapPin className="w-3 h-3 shrink-0 mt-0.5" />{store.address}</div>}
-        <button onClick={onAddStore} className="flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium"><Plus className="w-3.5 h-3.5" />新增工作網點</button>
+        
       </div>
       <ConfigForm
-        value={{ shiftId: entry.shiftId, tempDates: entry.tempDates, wage: entry.wage, wageMax: entry.wageMax, overtimeWage: entry.overtimeWage, mealBreak: entry.mealBreak, regularCount: entry.regularCount, backupCount: entry.backupCount }}
+        value={{ shiftId: entry.shiftId, tempDates: entry.tempDates, wage: entry.wage, wageMax: entry.wageMax, overtimeWage: entry.overtimeWage, mealBreak: entry.mealBreak, shuttleBus: entry.shuttleBus, regularCount: entry.regularCount, backupCount: entry.backupCount }}
         onChange={v => onUpdate({ ...entry, ...v })}
         shifts={shifts} onAddShift={onAddShift} hiringType={hiringType}
       />
@@ -461,8 +474,8 @@ function StepIndicator({ current }: { current: 1 | 2 }) {
 }
 
 // ── Main page ──────────────────────────────────────────────
-const defaultLocConfig = (): LocationConfig => ({ shiftId: "", tempDates: [emptyTempDate()], wage: "", wageMax: "", overtimeWage: "", mealBreak: true, regularCount: "", backupCount: "" });
-const defaultSiteEntry = (): SiteEntry => ({ id: Date.now().toString(), storeId: "", shiftId: "", tempDates: [emptyTempDate()], wage: "", wageMax: "", overtimeWage: "", mealBreak: true, regularCount: "", backupCount: "" });
+const defaultLocConfig = (): LocationConfig => ({ shiftId: "", tempDates: [emptyTempDate()], wage: "", wageMax: "", overtimeWage: "", mealBreak: true, shuttleBus: false, regularCount: "", backupCount: "" });
+const defaultSiteEntry = (): SiteEntry => ({ id: Date.now().toString(), storeId: "", shiftId: "", tempDates: [emptyTempDate()], wage: "", wageMax: "", overtimeWage: "", mealBreak: true, shuttleBus: false, regularCount: "", backupCount: "" });
 
 export function CreateJobPage() {
   const navigate = useNavigate();
@@ -471,6 +484,7 @@ export function CreateJobPage() {
   // Step 1
   const [jobTitle, setJobTitle]         = useState("");
   const [hiringType, setHiringType]     = useState<HiringType>("parttime");
+  const [payPeriod, setPayPeriod]       = useState<"daily" | "weekly" | "monthly">("monthly");
   const [jobCategory, setJobCategory]   = useState("");
   const [jobDesc, setJobDesc]           = useState("");
   const [certInput, setCertInput]       = useState("");
@@ -498,7 +512,7 @@ export function CreateJobPage() {
   const [showAddShift, setShowAddShift] = useState(false);
   const [submitError, setSubmitError]   = useState("");
 
-  const getSiteKey = (e: SiteEntry) => `${e.storeId}|${e.shiftId}|${JSON.stringify(e.tempDates.map(t=>t.date+t.start+t.end))}|${e.wage}|${e.overtimeWage}|${e.mealBreak}|${e.regularCount}|${e.backupCount}`;
+  const getSiteKey = (e: SiteEntry) => `${e.storeId}|${e.shiftId}|${JSON.stringify(e.tempDates.map(t=>t.date+t.start+t.end))}|${e.wage}|${e.overtimeWage}|${e.mealBreak}|${e.shuttleBus}|${e.regularCount}|${e.backupCount}`;
   const duplicateIds = (() => {
     if (locationMode !== "site") return new Set<string>();
     const keys = siteEntries.map(e => ({ id: e.id, key: getSiteKey(e) }));
@@ -568,6 +582,17 @@ export function CreateJobPage() {
                         <span className="text-xs text-blue-700">臨時工將在下一步「工作地配置」中填寫具體工作日期及時段，可新增多個日期。</span>
                       </div>
                     )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">結算周期 <span className="text-red-500">*</span></label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {([["daily","日結"],["weekly","週結"],["monthly","月結"]] as ["daily"|"weekly"|"monthly",string][]).map(([v,l]) => (
+                        <button key={v} type="button" onClick={() => setPayPeriod(v)}
+                          className={`py-2.5 rounded-lg border text-sm font-medium transition-all ${payPeriod===v?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

@@ -804,9 +804,8 @@ function JobDetailDrawer({ job, onClose, onSave }: { job: Job; onClose: () => vo
               <div className="px-6 py-5 border-b border-slate-100">
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">招募詳情</div>
                 <div className="space-y-3">
-                  <Row label="正式員工"><span className="text-sm font-semibold text-slate-900">{totalRegular} 人</span></Row>
-                  {totalBackup > 0 && <Row label="候補人員"><span className="text-sm font-semibold text-slate-900">{totalBackup} 人</span></Row>}
-                  <Row label="薪酬範圍"><span className="text-sm font-semibold text-slate-900">{job.wage}</span></Row>
+                  <Row label="总正式員工"><span className="text-sm font-semibold text-slate-900">{totalRegular} 人</span></Row>
+                  {totalBackup > 0 && <Row label="总候補人員"><span className="text-sm font-semibold text-slate-900">{totalBackup} 人</span></Row>}
                   <Row label="職位有效期">
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <span>{job.validityMonths} 個月</span>

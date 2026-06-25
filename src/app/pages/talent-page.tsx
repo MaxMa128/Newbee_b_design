@@ -1122,7 +1122,7 @@ export function TalentPage() {
                   )}
                 </div>
                 {/* Store */}
-                <FilterSelect value={storeFilter} onChange={setStoreFilter} label="全部門店">
+                <FilterSelect value={storeFilter} onChange={setStoreFilter} label="全部網點">
                   {allStores.map(s => <option key={s} value={s}>{s}</option>)}
                 </FilterSelect>
                 {/* Job */}
@@ -1218,7 +1218,7 @@ export function TalentPage() {
                       <th className="px-4 py-3 text-center w-[60px]">性別</th>
                       <th className="px-4 py-3 text-center w-[60px]">年齡</th>
                       <th className="px-4 py-3 text-left w-[110px]">申請職位</th>
-                      <th className="px-4 py-3 text-left w-[110px]">門店</th>
+                      <th className="px-4 py-3 text-left w-[110px]">工作网点</th>
                       <th className="px-4 py-3 text-left w-[100px]">申請時間</th>
                       <th className="px-4 py-3 text-left w-[90px]">狀態</th>
                       <th className="px-4 py-3 text-center w-[90px]">歷史記錄</th>
